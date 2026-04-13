@@ -12,7 +12,11 @@
       "Bash(curl:*)",
       "Bash(mvn dependency:tree -Dincludes=dev.langchain4j:*)",
       "Bash(jar -tf ~/.m2/repository/dev/langchain4j/langchain4j-open-ai/0.36.2/langchain4j-open-ai-0.36.2.jar)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(xargs grep:*)",
+      "Bash(xargs wc:*)",
+      "Bash(mvn dependency:tree)",
+      "Bash(mvn verify:*)"
     ]
   }
 }
