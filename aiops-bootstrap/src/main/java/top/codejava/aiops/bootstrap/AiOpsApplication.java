@@ -6,6 +6,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import picocli.CommandLine;
 
+import java.util.concurrent.Callable;
+
 /**
  * AIOps-Engine 启动入口
  * 使用 Spring Boot + Picocli 构建命令行应用
@@ -14,10 +16,10 @@ import picocli.CommandLine;
 public class AiOpsApplication implements CommandLineRunner {
 
     private final CommandLine.IFactory commandLineFactory;
-    private final PlanCommandRegistrar commandRegistrar;
+    private final CommandRegistrar commandRegistrar;
 
     public AiOpsApplication(CommandLine.IFactory commandLineFactory,
-                           PlanCommandRegistrar commandRegistrar) {
+                           CommandRegistrar commandRegistrar) {
         this.commandLineFactory = commandLineFactory;
         this.commandRegistrar = commandRegistrar;
     }
@@ -54,15 +56,19 @@ public class AiOpsApplication implements CommandLineRunner {
      * 将所有CLI命令注册到根命令下
      */
     @org.springframework.stereotype.Component
-    public static class PlanCommandRegistrar {
+    public static class CommandRegistrar {
         private final top.codejava.aiops.cli.command.PlanCommand planCommand;
+        private final top.codejava.aiops.cli.command.DeployCommand deployCommand;
 
-        public PlanCommandRegistrar(top.codejava.aiops.cli.command.PlanCommand planCommand) {
+        public CommandRegistrar(top.codejava.aiops.cli.command.PlanCommand planCommand,
+                               top.codejava.aiops.cli.command.DeployCommand deployCommand) {
             this.planCommand = planCommand;
+            this.deployCommand = deployCommand;
         }
 
         public void registerCommands(CommandLine rootCommand) {
             rootCommand.addSubcommand(planCommand);
+            rootCommand.addSubcommand(deployCommand);
         }
     }
 }
