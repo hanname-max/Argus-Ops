@@ -63,10 +63,12 @@ public class LocalEnvironmentScannerAdapter implements LocalEnvironmentPort {
      * 深度扫描检测编程语言和配置文件
      */
     private void detectLanguageAndConfig(Path rootPath, ProjectContext.ProjectContextBuilder builder, List<String> configFiles) throws IOException {
-        int javaCount = 0;
-        int pythonCount = 0;
-        int jsCount = 0;
-        long totalLines = 0;
+        final int[] counts = new int[3]; // javaCount[0], pythonCount[1], jsCount[2]
+        final long[] totalLines = new long[1];
+        counts[0] = 0;
+        counts[1] = 0;
+        counts[2] = 0;
+        totalLines[0] = 0;
 
         BiPredicate<Path, BasicFileAttributes> matcher = (path, attrs) -> {
             if (!attrs.isRegularFile()) return false;
@@ -74,9 +76,9 @@ public class LocalEnvironmentScannerAdapter implements LocalEnvironmentPort {
             String fileName = path.getFileName().toString().toLowerCase();
 
             // 统计语言扩展名
-            if (fileName.endsWith(".java")) javaCount++;
-            else if (fileName.endsWith(".py")) pythonCount++;
-            else if (fileName.endsWith(".js") || fileName.endsWith(".ts")) jsCount++;
+            if (fileName.endsWith(".java")) counts[0]++;
+            else if (fileName.endsWith(".py")) counts[1]++;
+            else if (fileName.endsWith(".js") || fileName.endsWith(".ts")) counts[2]++;
 
             // 收集配置文件
             if (isConfigFile(fileName)) {
@@ -95,13 +97,16 @@ public class LocalEnvironmentScannerAdapter implements LocalEnvironmentPort {
         for (Path file : matchedFiles) {
             try {
                 long lines = Files.lines(file).count();
-                totalLines += lines;
+                totalLines[0] += lines;
             } catch (IOException ignored) {
                 // 跳过无法读取的文件
             }
         }
 
         // 判断主要语言
+        int javaCount = counts[0];
+        int pythonCount = counts[1];
+        int jsCount = counts[2];
         if (javaCount >= pythonCount && javaCount >= jsCount) {
             builder.primaryLanguage("Java");
         } else if (pythonCount >= javaCount && pythonCount >= jsCount) {
@@ -112,7 +117,7 @@ public class LocalEnvironmentScannerAdapter implements LocalEnvironmentPort {
             builder.primaryLanguage("Unknown");
         }
 
-        builder.estimatedLinesOfCode(totalLines);
+        builder.estimatedLinesOfCode(totalLines[0]);
     }
 
     private boolean isConfigFile(String fileName) {

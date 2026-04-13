@@ -2,21 +2,19 @@
 package top.codejava.aiops.infrastructure.config;
 
 import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.anthropic.AnthropicChatModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.ollama.OllamaChatModel;
-import dev.langchain4j.model.localai.LocalAiChatModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import top.codejava.aiops.infrastructure.config.provider.ChatModelProvider;
 
-import java.time.Duration;
+import java.util.List;
 
 /**
  * AI 模型工厂
  * 根据配置动态创建对应的 ChatLanguageModel 实例，支持热拔插
+ * 使用策略模式，通过Spring自动发现所有ChatModelProvider实现
  */
 @Slf4j
 @Configuration
@@ -24,6 +22,7 @@ import java.time.Duration;
 public class AiModelFactory {
 
     private final AiOpsProperties properties;
+    private final List<ChatModelProvider> providers;
 
     /**
      * 创建远程AI模型 bean
@@ -48,52 +47,36 @@ public class AiModelFactory {
     }
 
     /**
-     * 根据配置创建具体的 ChatLanguageModel 实例
+     * 根据配置查找对应的ChatModelProvider并创建模型
      */
     private ChatLanguageModel createChatModel(AiOpsProperties.ProviderConfig config) {
-        String provider = config.getActiveProvider().toLowerCase();
-        String baseUrl = config.getBaseUrl();
-        String apiKey = config.getApiKey();
-        String modelName = config.getModelName();
-        double temperature = config.getTemperature() != null ? config.getTemperature() : 0.7;
-        int maxTokens = config.getMaxTokens() != null ? config.getMaxTokens() : 4096;
+        String providerName = config.getActiveProvider().toLowerCase();
 
-        return switch (provider) {
-            case "claude", "anthropic" -> AnthropicChatModel.builder()
-                    .apiKey(apiKey)
-                    .modelName(modelName != null ? modelName : "claude-3-5-sonnet-20241022")
-                    .temperature(temperature)
-                    .maxTokens(maxTokens)
-                    .baseUrl(baseUrl)
-                    .timeout(Duration.ofMinutes(5))
-                    .build();
+        for (ChatModelProvider provider : providers) {
+            for (String name : provider.names()) {
+                if (name.equalsIgnoreCase(providerName)) {
+                    if (!provider.isAvailable()) {
+                        throw new IllegalArgumentException(
+                                "AI provider '" + providerName + "' is not available. " +
+                                "Please add the corresponding LangChain4j dependency to pom.xml");
+                    }
+                    log.debug("Using ChatModelProvider: {}", provider.getClass().getSimpleName());
+                    return provider.create(config);
+                }
+            }
+        }
 
-            case "openai", "gpt" -> OpenAiChatModel.builder()
-                    .apiKey(apiKey)
-                    .modelName(modelName != null ? modelName : "gpt-4o")
-                    .temperature(temperature)
-                    .maxTokens(maxTokens)
-                    .baseUrl(baseUrl)
-                    .timeout(Duration.ofMinutes(5))
-                    .build();
+        // 收集所有支持的提供商名称
+        StringBuilder supported = new StringBuilder();
+        for (ChatModelProvider p : providers) {
+            if (supported.length() > 0) {
+                supported.append(", ");
+            }
+            supported.append(p.names()[0]);
+        }
 
-            case "ollama" -> OllamaChatModel.builder()
-                    .baseUrl(baseUrl != null ? baseUrl : "http://localhost:11434")
-                    .modelName(modelName != null ? modelName : "llama3")
-                    .temperature(temperature)
-                    .numPredict(maxTokens)
-                    .build();
-
-            case "lmstudio", "localai", "lm-studio" -> LocalAiChatModel.builder()
-                    .baseUrl(baseUrl != null ? baseUrl : "http://localhost:1234/v1")
-                    .modelName(modelName != null ? modelName : "default")
-                    .temperature(temperature)
-                    .maxTokens(maxTokens)
-                    .apiKey(apiKey != null ? apiKey : "lm-studio")
-                    .build();
-
-            default -> throw new IllegalArgumentException(
-                    "Unsupported AI provider: " + provider + ". Supported: claude, openai, ollama, lmstudio");
-        };
+        throw new IllegalArgumentException(
+                "Unsupported AI provider: '" + providerName + "'. " +
+                "Supported providers: " + supported);
     }
 }

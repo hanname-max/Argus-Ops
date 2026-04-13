@@ -1,6 +1,7 @@
 // aiops-infrastructure/src/main/java/top/codejava/aiops/infrastructure/config/AiOpsProperties.java
 package top.codejava.aiops.infrastructure.config;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -28,8 +29,9 @@ public class AiOpsProperties {
     @Data
     public static class ProviderConfig {
         /**
-         * 激活的提供商: claude, openai, ollama, lmstudio
+         * 激活的提供商: claude, openai, ollama, lmstudio 等
          */
+        @NotBlank(message = "activeProvider cannot be blank")
         private String activeProvider;
 
         /**
@@ -41,6 +43,11 @@ public class AiOpsProperties {
          * API Key（对于云端服务需要）
          */
         private String apiKey;
+
+        /**
+         * Secret Key（部分提供商如文心一言需要）
+         */
+        private String secretKey;
 
         /**
          * 模型名称

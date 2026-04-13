@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn clean:*)",
+      "Bash(mvn compile:*)",
+      "Bash(mvn dependency:resolve:*)",
+      "Bash(dir:*)",
+      "Bash(jar -tf \"C:\\\\develop\\\\apache-maven-3.9.4\\\\mvn_repo\\\\dev\\\\langchain4j\\\\langchain4j-anthropic\\\\0.36.2\\\\langchain4j-anthropic-0.36.2.jar\")",
+      "Bash(findstr /i \"Anthropic\")",
+      "Bash(mvn dependency:purge-local-reinstall:*)"
+    ]
+  }
+}

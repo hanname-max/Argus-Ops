@@ -50,7 +50,7 @@ public class SshExecutorAdapter implements OpsExecutorPort {
             ByteArrayOutputStream stderrBuffer = new ByteArrayOutputStream();
 
             channel.setOutputStream(stdoutBuffer);
-            channel.setErrOutputStream(stderrBuffer);
+            channel.setErrStream(stderrBuffer);
 
             // 执行命令
             channel.connect();
@@ -171,15 +171,23 @@ public class SshExecutorAdapter implements OpsExecutorPort {
                         try {
                             channel.cd(dir);
                         } catch (SftpException ex) {
-                            channel.mkdir(dir);
-                            channel.cd(dir);
+                            try {
+                                channel.mkdir(dir);
+                                channel.cd(dir);
+                            } catch (SftpException ex2) {
+                                throw new OpsExecutionException("Failed to create directory " + dir, ex2);
+                            }
                         }
                     }
                 }
             }
 
-            channel.put(localPath, channel.pwd());
-            log.info("File uploaded successfully to {}:{}", server.getHost(), remoteDir);
+            try {
+                channel.put(localPath, channel.pwd());
+                log.info("File uploaded successfully to {}:{}", server.getHost(), remoteDir);
+            } catch (SftpException e) {
+                throw new OpsExecutionException("Failed to upload file: " + e.getMessage(), e);
+            }
 
             channel.disconnect();
             session.disconnect();
