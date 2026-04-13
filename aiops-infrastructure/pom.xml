@@ -65,7 +65,7 @@
             <version>${langchain4j.version}</version>
         </dependency>
 
-        <!-- Additional AI providers (optional, uncomment as needed when using newer LangChain4j versions) -->
+        <!-- Additional AI providers (optional, uncomment as needed) -->
         <!-- Google Gemini -->
         <!--
         <dependency>
@@ -82,7 +82,7 @@
             <version>${langchain4j.version}</version>
         </dependency>
         -->
-        <!-- Baidu WenXin QianFan -->
+        <!-- Baidu WenXin QianFan (文心一言) -->
         <!--
         <dependency>
             <groupId>dev.langchain4j</groupId>
@@ -90,7 +90,7 @@
             <version>${langchain4j.version}</version>
         </dependency>
         -->
-        <!-- DashScope (Tongyi Qwen) was added in later LangChain4j versions -->
+        <!-- Alibaba Cloud DashScope (通义千问) -->
         <!--
         <dependency>
             <groupId>dev.langchain4j</groupId>
@@ -98,7 +98,7 @@
             <version>${langchain4j.version}</version>
         </dependency>
         -->
-        <!-- DeepSeek was added in later LangChain4j versions -->
+        <!-- DeepSeek (深度求索) -->
         <!--
         <dependency>
             <groupId>dev.langchain4j</groupId>
@@ -106,6 +106,8 @@
             <version>${langchain4j.version}</version>
         </dependency>
         -->
+        <!-- ByteDance Doubao (豆包) - 通过 OpenAI 兼容接口 -->
+        <!-- 不需要额外依赖，使用 OpenAiChatModel -->
 
         <!-- Lombok -->
         <dependency>
