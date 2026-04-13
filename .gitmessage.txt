@@ -1,0 +1,22 @@
+# <type>: <description>
+#
+# type 必须是以下之一：
+#
+# feat:     新增功能（feature）
+# fix:      修复 bug
+# docs:     文档更新
+# style:    代码格式调整（不影响代码运行）
+# refactor: 重构（既不新增功能也不修复bug）
+# perf:     性能优化
+# test:     测试相关
+# build:    构建工具/依赖相关
+# ci:       CI/CD 相关
+# chore:    其他琐事（不修改src或测试）
+# new:      新增文件/模块骨架
+#
+# 示例：
+# new: 初始化多模块六边形架构骨架
+# feat: 添加混合执行引擎双轨制支持
+# fix: 修复SSH连接超时处理
+#
+
