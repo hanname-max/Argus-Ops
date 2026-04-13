@@ -2,7 +2,7 @@
 package top.codejava.aiops.infrastructure.config.provider;
 
 import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.localai.LocalAiChatModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.springframework.stereotype.Component;
 import top.codejava.aiops.infrastructure.config.AiOpsProperties.ProviderConfig;
 
@@ -25,7 +25,7 @@ public class LmStudioChatModelProvider implements ChatModelProvider {
         double temperature = config.getTemperature() != null ? config.getTemperature() : 0.7;
         int maxTokens = config.getMaxTokens() != null ? config.getMaxTokens() : 4096;
 
-        LocalAiChatModel.Builder builder = LocalAiChatModel.builder()
+        var builder = OpenAiChatModel.builder()
                 .baseUrl(baseUrl)
                 .modelName(modelName)
                 .temperature(temperature)

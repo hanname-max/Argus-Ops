@@ -27,7 +27,7 @@ public class OpenAiChatModelProvider implements ChatModelProvider {
         int maxTokens = config.getMaxTokens() != null ? config.getMaxTokens() : 4096;
         String baseUrl = config.getBaseUrl();
 
-        OpenAiChatModel.Builder builder = OpenAiChatModel.builder()
+        var builder = OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(modelName)
                 .temperature(temperature)

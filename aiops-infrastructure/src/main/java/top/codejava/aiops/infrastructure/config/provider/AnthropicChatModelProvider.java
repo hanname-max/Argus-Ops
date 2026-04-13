@@ -27,7 +27,7 @@ public class AnthropicChatModelProvider implements ChatModelProvider {
         int maxTokens = config.getMaxTokens() != null ? config.getMaxTokens() : 4096;
         String baseUrl = config.getBaseUrl();
 
-        AnthropicChatModel.Builder builder = AnthropicChatModel.builder()
+        var builder = AnthropicChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(modelName)
                 .temperature(temperature)
