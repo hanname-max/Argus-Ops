@@ -2,6 +2,7 @@
 <project version="4">
   <component name="CompilerConfiguration">
     <annotationProcessing>
+      <profile default="true" name="Default" enabled="true" />
       <profile name="Annotation profile for AIOps-Engine Parent" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
@@ -12,22 +13,13 @@
         <module name="aiops-application" />
         <module name="aiops-cli" />
         <module name="aiops-bootstrap" />
+        <module name="aiops-infrastructure" />
         <module name="aiops-domain" />
       </profile>
       <profile name="Maven default annotation processors profile" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-      </profile>
-      <profile name="Annotation profile for aiops-infrastructure" enabled="true">
-        <sourceOutputDir name="target/generated-sources/annotations" />
-        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="false">
-          <entry name="$PROJECT_DIR$/../../../develop/apache-maven-3.9.4/mvn_repo/org/projectlombok/lombok/1.18.34/lombok-1.18.34.jar" />
-          <entry name="$PROJECT_DIR$/../../../develop/apache-maven-3.9.4/mvn_repo/org/projectlombok/lombok/1.18.34/lombok-1.18.34.jar" />
-        </processorPath>
-        <module name="aiops-infrastructure" />
       </profile>
     </annotationProcessing>
   </component>
