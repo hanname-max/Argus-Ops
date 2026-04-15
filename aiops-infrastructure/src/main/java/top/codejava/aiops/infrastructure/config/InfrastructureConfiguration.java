@@ -2,6 +2,7 @@
 package top.codejava.aiops.infrastructure.config;
 
 import dev.langchain4j.model.chat.ChatLanguageModel;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -40,8 +41,8 @@ public class InfrastructureConfiguration {
      */
     @Bean
     public LlmRemoteBrainPort llmRemoteBrainPort(
-            ChatLanguageModel remoteChatModel,
-            ChatLanguageModel localChatModel) {
+            @Qualifier("remoteChatModel") ChatLanguageModel remoteChatModel,
+            @Qualifier("localChatModel") ChatLanguageModel localChatModel) {
         return new DynamicRemoteBrainAdapter(remoteChatModel, localChatModel);
     }
 
@@ -83,6 +84,7 @@ public class InfrastructureConfiguration {
      * 注册智能执行路由适配器（策略路由+自动降级）
      */
     @Bean
+    @org.springframework.context.annotation.Primary
     public OpsExecutorPort opsExecutorPort(
             RpcExecutorAdapter rpcExecutorAdapter,
             SshExecutorAdapter sshExecutorAdapter) {

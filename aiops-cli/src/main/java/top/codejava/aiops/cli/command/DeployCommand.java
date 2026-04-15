@@ -2,6 +2,8 @@
 package top.codejava.aiops.cli.command;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine;
 import top.codejava.aiops.application.port.execution.DaemonInstallerPort;
 import top.codejava.aiops.application.port.execution.OpsExecutorPort;
@@ -21,9 +23,11 @@ import java.util.concurrent.Callable;
         description = "部署应用到目标服务器，自动检测并引导安装 AIOps Daemon",
         mixinStandardHelpOptions = true
 )
+@Component
 @RequiredArgsConstructor
 public class DeployCommand implements Callable<Integer> {
 
+    @org.springframework.beans.factory.annotation.Qualifier("opsExecutorPort")
     private final OpsExecutorPort opsExecutor;
     private final DaemonInstallerPort daemonInstaller;
 

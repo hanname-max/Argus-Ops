@@ -2,6 +2,7 @@
 package top.codejava.aiops.cli.command;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine;
 import top.codejava.aiops.application.usecase.GeneratePlanUseCase;
 import top.codejava.aiops.domain.model.PlanDraft;
@@ -18,6 +19,7 @@ import java.util.concurrent.Callable;
         description = "扫描当前项目目录并生成部署计划",
         mixinStandardHelpOptions = true
 )
+@Component
 @RequiredArgsConstructor
 public class PlanCommand implements Callable<Integer> {
 

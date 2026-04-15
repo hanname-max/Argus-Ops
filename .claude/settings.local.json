@@ -16,7 +16,16 @@
       "Bash(xargs grep:*)",
       "Bash(xargs wc:*)",
       "Bash(mvn dependency:tree)",
-      "Bash(mvn verify:*)"
+      "Bash(mvn verify:*)",
+      "Bash(mvn dependency:tree -Dincludes=org.slf4j:*)",
+      "Bash(mvn dependency:tree -pl aiops-bootstrap)",
+      "Bash(java -jar aiops-bootstrap/target/aiops-bootstrap-1.0.0-SNAPSHOT.jar --version)",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(timeout 10 java -jar aiops-bootstrap/target/aiops-bootstrap-1.0.0-SNAPSHOT.jar --help)",
+      "Bash(timeout 15 java:*)",
+      "Bash(timeout 20 java -jar aiops-bootstrap/target/aiops-bootstrap-1.0.0-SNAPSHOT.jar)",
+      "Bash(echo \"Timeout/Exit: $?\")",
+      "Bash(timeout 20 java:*)"
     ]
   }
 }
