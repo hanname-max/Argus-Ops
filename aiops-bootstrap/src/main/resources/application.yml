@@ -18,9 +18,9 @@ aiops:
   # 远程AI配置（负责架构规划和脚本生成）
   remote:
     active-provider: claude
-    api-key: 6e61acd2-be78-4eea-92a3-237a7b370943
-    base-url: https://ark.cn-beijing.volces.com/api/coding/v3
-    model-name: ark-code-latest
+    api-key: you-api-key
+    base-url: you-base-url
+    model-name: you-model-name
     temperature: 0.7
     max-tokens: 4096
 
