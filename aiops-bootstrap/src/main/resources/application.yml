@@ -116,9 +116,10 @@ aiops:
 #     temperature: 0.3
 #     max-tokens: 2048
 
-# 服务器端口
-server:
-  port: ${SERVER_PORT:20}
+# 禁止启动Web服务器（这是命令行应用，只需要RestTemplate客户端功能）
+spring:
+  main:
+    web-application-type: none
 
 # 日志配置
 logging:

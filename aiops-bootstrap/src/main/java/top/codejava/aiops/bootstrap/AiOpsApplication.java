@@ -32,7 +32,9 @@ public class AiOpsApplication implements CommandLineRunner {
     public void run(String... args) {
         CommandLine commandLine = new CommandLine(new RootCommand(), commandLineFactory);
         commandRegistrar.registerCommands(commandLine);
-        commandLine.execute(args);
+        int exitCode = commandLine.execute(args);
+        // 命令行应用执行完成后退出
+        System.exit(exitCode);
     }
 
     /**
