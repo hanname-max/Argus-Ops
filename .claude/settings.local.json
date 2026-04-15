@@ -25,7 +25,8 @@
       "Bash(timeout 15 java:*)",
       "Bash(timeout 20 java -jar aiops-bootstrap/target/aiops-bootstrap-1.0.0-SNAPSHOT.jar)",
       "Bash(echo \"Timeout/Exit: $?\")",
-      "Bash(timeout 20 java:*)"
+      "Bash(timeout 20 java:*)",
+      "Bash(java:*)"
     ]
   }
 }

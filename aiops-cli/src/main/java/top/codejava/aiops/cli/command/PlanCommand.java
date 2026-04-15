@@ -12,12 +12,12 @@ import java.util.Scanner;
 import java.util.concurrent.Callable;
 
 /**
- * 生成部署计划命令
- * 扫描当前目录并生成Docker化部署计划
+ * Generate deployment plan command
+ * Scan the current directory and generate a Docker deployment plan
  */
 @CommandLine.Command(
         name = "plan",
-        description = "扫描当前项目目录并生成部署计划",
+        description = "Scan project directory and generate deployment plan",
         mixinStandardHelpOptions = true
 )
 @Component
@@ -28,21 +28,23 @@ public class PlanCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-p", "--path"},
-            description = "项目根目录路径，默认为当前工作目录"
+            description = "Project root directory path, defaults to current working directory"
     )
     private Path path;
 
     @Override
     public Integer call() {
-        // 交互式询问 - 本地主导
+        // Interactive prompt - local主导
         if (path == null) {
             System.out.println();
-            System.out.print("请输入需要诊断/部署的项目绝对路径 (默认当前目录): ");
+            System.out.print("Enter the absolute path of project to diagnose/deploy (default: current directory): ");
             Scanner scanner = new Scanner(System.in);
             String input = scanner.nextLine().trim();
             if (input.isEmpty()) {
                 path = Path.of("").toAbsolutePath();
             } else {
+                // Handle both Windows ( and / separators correctly
+                input = input.replace('\\', '/');
                 path = Path.of(input).toAbsolutePath();
             }
         }

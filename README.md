@@ -109,13 +109,13 @@ aiops:
   # 🔮 远程 AI 配置（负责架构规划和脚本生成）
   remote:
     active-provider: claude
-    api-key: 6e61acd2-be78-4eea-92a3-237a7b370943
+    api-key: ${ANTHROPIC_API_KEY:your-anthropic-api-key-here}
     base-url: https://ark.cn-beijing.volces.com/api/coding/v3
     model-name: ark-code-latest
     temperature: 0.7
     max-tokens: 4096
 
-  # 🛡️ 本地 AI 配置（负责安全审计 + 错误分析）
+  # 🛡️ 本地 AI 配置（负责上下文扫描和安全审计）
   local:
     active-provider: ollama
     base-url: http://localhost:11434
@@ -123,7 +123,7 @@ aiops:
     temperature: 0.3
     max-tokens: 2048
 
-# 🚫 禁止启动 Web 服务器（这是命令行应用）
+# 🚫 禁止启动 Web 服务器（这是命令行应用，只需要RestTemplate客户端功能）
 spring:
   main:
     web-application-type: none
@@ -237,6 +237,6 @@ java -jar aiops-bootstrap/target/aiops-bootstrap-1.0.0-SNAPSHOT.jar deploy \
 
 ## 🎉 最后
 
-> **“给本地一双慧眼，给远程一双手，部署从此行云流水”**
+> **"给本地一双慧眼，给远程一双手，部署从此行云流水"**
 
 Happy Deploying! 🚀

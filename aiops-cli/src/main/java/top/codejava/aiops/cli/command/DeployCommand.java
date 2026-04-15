@@ -15,12 +15,12 @@ import java.util.Scanner;
 import java.util.concurrent.Callable;
 
 /**
- * 部署命令
- * 支持双轨执行，自动检测 Daemon 并引导安装
+ * Deploy command
+ * Supports dual-track execution, auto-detect Daemon and guide installation
  */
 @CommandLine.Command(
         name = "deploy",
-        description = "部署应用到目标服务器，自动检测并引导安装 AIOps Daemon",
+        description = "Deploy application to target server, auto-detect and install AIOps Daemon",
         mixinStandardHelpOptions = true
 )
 @Component
@@ -33,52 +33,52 @@ public class DeployCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"--host"},
-            description = "目标服务器IP或主机名",
+            description = "Target server IP or hostname",
             required = true
     )
     private String host;
 
     @CommandLine.Option(
             names = {"--ssh-port"},
-            description = "SSH端口 (默认: 22)"
+            description = "SSH port (default: 22)"
     )
     private int sshPort = 22;
 
     @CommandLine.Option(
             names = {"--rpc-port"},
-            description = "Daemon RPC端口 (默认: 8765)"
+            description = "Daemon RPC port (default: 8765)"
     )
     private int rpcPort = 8765;
 
     @CommandLine.Option(
             names = {"--username"},
-            description = "SSH用户名",
+            description = "SSH username",
             required = true
     )
     private String username;
 
     @CommandLine.Option(
             names = {"--password"},
-            description = "SSH密码（推荐使用密钥认证）"
+            description = "SSH password (key-based auth recommended)"
     )
     private String password;
 
     @CommandLine.Option(
             names = {"--private-key"},
-            description = "SSH私钥文件路径"
+            description = "SSH private key file path"
     )
     private String privateKeyPath;
 
     @CommandLine.Option(
             names = {"--command"},
-            description = "要执行的部署命令",
+            description = "Deployment command to execute",
             required = true
     )
     private String command;
 
     @CommandLine.Option(
             names = {"--workdir"},
-            description = "工作目录"
+            description = "Working directory"
     )
     private String workingDirectory;
 
@@ -106,13 +106,13 @@ public class DeployCommand implements Callable<Integer> {
             return executeCommand(command, server);
         }
 
-        // Daemon 未运行，进入交互式引导
-        System.out.println("\u001B[33m⚠\u001B[0m 检测到远程节点尚未部署 AIOps Daemon.");
+        // Daemon not running, enter interactive guide
+        System.out.println("\u001B[33m⚠\u001B[0m AIOps Daemon is not running on remote host.");
         System.out.println();
-        System.out.println("安装 Daemon 可以带来以下优势：");
-        System.out.println("  • 更快的执行速度（保持长连接，无需重复握手）");
-        System.out.println("  • 更好的 AI 上下文感知能力");
-        System.out.println("  • 支持增量部署和状态持久化");
+        System.out.println("Installing Daemon brings these benefits:");
+        System.out.println("  • Faster execution (persistent connection, no repeated handshakes)");
+        System.out.println("  • Better AI context awareness");
+        System.out.println("  • Supports incremental deployment and state persistence");
         System.out.println();
 
         // 交互式询问用户
@@ -166,17 +166,17 @@ public class DeployCommand implements Callable<Integer> {
     }
 
     /**
-     * 提示用户选择安装方式
+     * Prompt user to choose installation method
      */
     private String promptUserChoice() {
-        System.out.print("是否授权本地通过 SSH 自动为您部署？(Y/N/Manual) > ");
+        System.out.print("Allow local to auto-install via SSH? (Y/N/Manual) > ");
         Scanner scanner = new Scanner(System.in);
         String input = scanner.nextLine().trim();
         if (input.isEmpty()) {
-            return "n"; // 默认不安装
+            return "n"; // Default: do not install
         }
-        // 处理中文输入
-        if (input.equals("是") || input.equals("y") || input.equals("Y")) {
+        // Handle both English and Chinese input
+        if (input.equals("是") || input.equals("y") || input.equals("Y") || input.equals("yes")) {
             return "y";
         }
         if (input.startsWith("man") || input.equals("手动")) {

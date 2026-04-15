@@ -18,8 +18,8 @@ aiops:
   # 远程AI配置（负责架构规划和脚本生成）
   remote:
     active-provider: claude
-    api-key: ${ANTHROPIC_API_KEY:your-anthropic-api-key-here}
-    base-url: ${ANTHROPIC_BASE_URL:https://ark.cn-beijing.volces.com/api/coding}
+    api-key: 6e61acd2-be78-4eea-92a3-237a7b370943
+    base-url: https://ark.cn-beijing.volces.com/api/coding/v3
     model-name: ark-code-latest
     temperature: 0.7
     max-tokens: 4096

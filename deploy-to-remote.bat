@@ -5,8 +5,8 @@ echo       AIOps-Engine 远程部署工具
 echo ========================================
 echo.
 echo 远程配置信息：
-echo   - 目标端口：20/tcp (HTTP)
-echo   - 需要远程服务器已开放20端口且无占用
+echo   - 目标端口：8765/tcp (RPC)
+echo   - 需要远程服务器已开放8765端口且无占用
 echo   - 需要远程Linux服务器已安装JDK 21
 echo.
 
@@ -15,7 +15,7 @@ set /p SERVER_IP=请输入远程服务器IP地址:
 echo.
 echo 确认配置信息：
 echo   远程服务器IP: %SERVER_IP%
-echo   目标端口: 20
+echo   目标端口: 8765
 echo   JAR包将上传到: ~/aiops/
 echo.
 
@@ -48,19 +48,19 @@ echo --------------------------------------------------------
 echo cd ~/aiops
 echo.
 echo # 检查端口是否被占用
-echo lsof -i:20 || echo "端口20未被占用，可以启动"
+echo lsof -i:8765 || echo "端口8765未被占用，可以启动"
 echo.
 echo # 启动应用（使用环境变量传入API Key）
-echo export ANTHROPIC_API_KEY=6bb65db7-422e-4e30-93f1-b17407cd35a7
-echo java -Dserver.port=20 -jar aiops-bootstrap-1.0.0-SNAPSHOT.jar
+echo export ANTHROPIC_API_KEY=your-api-key-here
+echo java -Dserver.port=8765 -jar aiops-bootstrap-1.0.0-SNAPSHOT.jar
 echo.
 echo # 如需后台运行：
-echo nohup java -Dserver.port=20 -jar aiops-bootstrap-1.0.0-SNAPSHOT.jar > app.log 2>&1 &
+echo nohup java -Dserver.port=8765 -jar aiops-bootstrap-1.0.0-SNAPSHOT.jar > app.log 2>&1 &
 echo.
 
 echo.
 echo [提示] 复制上述命令到远程服务器执行即可完成部署
-echo [提示] 部署完成后访问：http://%SERVER_IP%/ 测试服务
+echo [提示] 部署完成后，本地就可以使用 Daemon 加速了
 
 goto :end
 

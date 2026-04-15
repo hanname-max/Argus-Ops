@@ -6,6 +6,8 @@ import top.codejava.aiops.application.port.LocalEnvironmentPort;
 import top.codejava.aiops.domain.model.ProjectContext;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -94,12 +96,24 @@ public class LocalEnvironmentScannerAdapter implements LocalEnvironmentPort {
                 .collect(Collectors.toList());
 
         // 估算代码行数（粗略）
+        // 支持自动检测编码，UTF-8优先，失败回退到GBK（Windows常见）
         for (Path file : matchedFiles) {
             try {
-                long lines = Files.lines(file).count();
+                // First try UTF-8
+                long lines;
+                try {
+                    lines = Files.lines(file, StandardCharsets.UTF_8).count();
+                } catch (UncheckedIOException e) {
+                    // If UTF-8 fails, try GBK (common on Windows for Chinese projects)
+                    if (e.getCause() instanceof java.nio.charset.MalformedInputException) {
+                        lines = Files.lines(file, java.nio.charset.Charset.forName("GBK")).count();
+                    } else {
+                        throw e;
+                    }
+                }
                 totalLines[0] += lines;
-            } catch (IOException ignored) {
-                // 跳过无法读取的文件
+            } catch (IOException | UncheckedIOException ignored) {
+                // Skip unreadable files
             }
         }
 
