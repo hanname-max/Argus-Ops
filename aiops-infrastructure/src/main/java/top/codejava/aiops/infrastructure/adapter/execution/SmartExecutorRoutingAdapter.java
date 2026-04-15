@@ -3,6 +3,7 @@ package top.codejava.aiops.infrastructure.adapter.execution;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import top.codejava.aiops.application.port.execution.LogStreamCallback;
 import top.codejava.aiops.application.port.execution.OpsExecutorPort;
 import top.codejava.aiops.domain.execution.ExecutionResult;
 import top.codejava.aiops.domain.execution.ShellCommand;
@@ -17,6 +18,8 @@ import top.codejava.aiops.domain.execution.TargetServer;
  * 2. 如果开放 → 使用 RpcExecutorAdapter
  * 3. 如果探测失败 → 直接降级使用 SshExecutorAdapter
  * 4. 如果 RPC 执行过程中发生网络错误 → 也会降级
+ *
+ * 本地主导架构：所有AI分析由本地完成，这里只负责路由执行
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -44,6 +47,26 @@ public class SmartExecutorRoutingAdapter implements OpsExecutorPort {
             log.info("RPC daemon not detected on {}:{}, falling back to direct SSH execution",
                     server.getHost(), server.getRpcPort());
             return sshExecutor.execute(cmd, server);
+        }
+    }
+
+    @Override
+    public void executeAndStream(ShellCommand cmd, TargetServer server, LogStreamCallback callback) {
+        // 路由探测逻辑同execute，但支持流式回调
+        if (probePort(server, server.getRpcPort(), PROBE_TIMEOUT_MS)) {
+            log.info("RPC daemon detected on {}:{}, using streaming RPC execution",
+                    server.getHost(), server.getRpcPort());
+            try {
+                rpcExecutor.executeAndStream(cmd, server, callback);
+                return;
+            } catch (Exception e) {
+                log.warn("RPC streaming failed, falling back to SSH streaming: {}", e.getMessage());
+                sshExecutor.executeAndStream(cmd, server, callback);
+            }
+        } else {
+            log.info("RPC daemon not detected on {}:{}, falling back to direct SSH streaming",
+                    server.getHost(), server.getRpcPort());
+            sshExecutor.executeAndStream(cmd, server, callback);
         }
     }
 

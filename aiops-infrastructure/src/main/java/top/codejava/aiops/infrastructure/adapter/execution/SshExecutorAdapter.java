@@ -195,4 +195,79 @@ public class SshExecutorAdapter implements OpsExecutorPort {
             throw new OpsExecutionException("SCP upload failed: " + e.getMessage(), e);
         }
     }
+
+    @Override
+    public void executeAndStream(top.codejava.aiops.domain.execution.ShellCommand cmd, top.codejava.aiops.domain.execution.TargetServer server, top.codejava.aiops.application.port.execution.LogStreamCallback callback) {
+        JSch jsch = new JSch();
+        com.jcraft.jsch.Session session = null;
+
+        try {
+            // 创建 SSH session
+            session = createSession(jsch, server);
+            session.connect( (int) Math.min(cmd.getTimeoutMs(), 30000) );
+            log.debug("SSH connected to {}:{}", server.getHost(), server.getSshPort());
+
+            // 打开执行通道
+            com.jcraft.jsch.ChannelExec channel = (com.jcraft.jsch.ChannelExec) session.openChannel("exec");
+
+            // 设置工作目录
+            String fullCmd = buildFullCommand(cmd);
+            channel.setCommand(fullCmd);
+            log.debug("Streaming command over SSH: {}", fullCmd);
+
+            // 实时回调每一行输出
+            java.io.BufferedReader stdoutReader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(channel.getInputStream(), java.nio.charset.StandardCharsets.UTF_8));
+            java.io.BufferedReader stderrReader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(channel.getErrStream(), java.nio.charset.StandardCharsets.UTF_8));
+
+            channel.connect();
+
+            // 并发读取 stdout 和 stderr，实时回调
+            Thread stdoutThread = new Thread(() -> {
+                String line;
+                try {
+                    while ((line = stdoutReader.readLine()) != null) {
+                        callback.onNext(line);
+                    }
+                } catch (java.io.IOException e) {
+                    log.debug("Stdout reading interrupted", e);
+                }
+            });
+
+            Thread stderrThread = new Thread(() -> {
+                String line;
+                try {
+                    while ((line = stderrReader.readLine()) != null) {
+                        callback.onError(line);
+                    }
+                } catch (java.io.IOException e) {
+                    log.debug("Stderr reading interrupted", e);
+                }
+            });
+
+            stdoutThread.start();
+            stderrThread.start();
+
+            try {
+                stdoutThread.join(cmd.getTimeoutMs());
+                stderrThread.join(cmd.getTimeoutMs());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
+            int exitCode = channel.getExitStatus();
+            callback.onComplete(exitCode);
+
+            channel.disconnect();
+            session.disconnect();
+
+        } catch (Exception e) {
+            log.error("SSH streaming failed: {}", e.getMessage());
+            if (session != null && session.isConnected()) {
+                session.disconnect();
+            }
+            throw new OpsExecutionException("SSH streaming failed: " + e.getMessage(), e);
+        }
+    }
 }

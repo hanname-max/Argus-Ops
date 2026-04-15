@@ -8,6 +8,7 @@ import top.codejava.aiops.application.usecase.GeneratePlanUseCase;
 import top.codejava.aiops.domain.model.PlanDraft;
 
 import java.nio.file.Path;
+import java.util.Scanner;
 import java.util.concurrent.Callable;
 
 /**
@@ -33,14 +34,25 @@ public class PlanCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        Path targetPath = path != null ? path : Path.of("").toAbsolutePath();
+        // 交互式询问 - 本地主导
+        if (path == null) {
+            System.out.println();
+            System.out.print("请输入需要诊断/部署的项目绝对路径 (默认当前目录): ");
+            Scanner scanner = new Scanner(System.in);
+            String input = scanner.nextLine().trim();
+            if (input.isEmpty()) {
+                path = Path.of("").toAbsolutePath();
+            } else {
+                path = Path.of(input).toAbsolutePath();
+            }
+        }
 
         System.out.println();
-        System.out.println("Scanning project at: " + targetPath);
+        System.out.println("Scanning project at: " + path);
         System.out.println("========================================");
 
         try {
-            PlanDraft draft = generatePlanUseCase.execute(targetPath);
+            PlanDraft draft = generatePlanUseCase.execute(path);
 
             System.out.println();
             System.out.println("\u001B[1mResult:\u001B[0m");

@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
+import top.codejava.aiops.application.port.execution.LogStreamCallback;
 import top.codejava.aiops.application.port.execution.OpsExecutorPort;
 import top.codejava.aiops.domain.exception.OpsExecutionException;
 import top.codejava.aiops.domain.execution.ExecutionResult;
@@ -86,6 +87,54 @@ public class RpcExecutorAdapter implements OpsExecutorPort {
         } catch (IOException e) {
             log.debug("RPC port {} on {} is not reachable: {}", port, server.getHost(), e.getMessage());
             return false;
+        }
+    }
+
+    @Override
+    public void executeAndStream(ShellCommand cmd, TargetServer server, LogStreamCallback callback) {
+        String url = server.getRpcBaseUrl() + "/api/v1/execute/stream";
+
+        // RPC daemon already supports streaming back to local
+        // For now, we do a synchronous request and callback line by line after receiving
+        RpcExecuteRequest request = new RpcExecuteRequest(
+                cmd.getArguments(),
+                cmd.getWorkingDirectory(),
+                cmd.getTimeoutMs()
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<RpcExecuteRequest> entity = new HttpEntity<>(request, headers);
+
+        try {
+            RpcExecuteResponse response = restTemplate.postForObject(
+                    url, entity, RpcExecuteResponse.class);
+
+            if (response == null) {
+                throw new OpsExecutionException("Empty response from RPC daemon");
+            }
+
+            // Split response and callback line by line to local
+            if (response.stdout() != null && !response.stdout().isEmpty()) {
+                for (String line : response.stdout().split("\\R")) {
+                    callback.onNext(line);
+                }
+            }
+            if (response.stderr() != null && !response.stderr().isEmpty()) {
+                for (String line : response.stderr().split("\\R")) {
+                    callback.onError(line);
+                }
+            }
+
+            callback.onComplete(response.exitCode());
+
+        } catch (ResourceAccessException e) {
+            if (e.getRootCause() instanceof SocketTimeoutException) {
+                throw new OpsExecutionException("RPC daemon timeout at " + url, e);
+            }
+            throw new OpsExecutionException("RPC connection failed: " + url, e);
+        } catch (Exception e) {
+            throw new OpsExecutionException("RPC execution failed: " + e.getMessage(), e);
         }
     }
 
