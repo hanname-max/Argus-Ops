@@ -9,11 +9,12 @@
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
-    <artifactId>aiops-application</artifactId>
-    <name>AIOps-Application</name>
-    <description>应用层：定义用例和端口接口，仅依赖领域层</description>
+    <artifactId>aiops-web</artifactId>
+    <name>AIOps-Web</name>
+    <description>Web 可视化接入层，提供 REST API 和 SSE 流式推送</description>
 
     <dependencies>
+        <!-- Project dependencies -->
         <dependency>
             <groupId>top.codejava</groupId>
             <artifactId>aiops-type</artifactId>
@@ -22,29 +23,34 @@
             <groupId>top.codejava</groupId>
             <artifactId>aiops-domain</artifactId>
         </dependency>
-
-        <!-- Spring Context for annotations (@Component, @Value etc) -->
         <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-context</artifactId>
+            <groupId>top.codejava</groupId>
+            <artifactId>aiops-application</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>top.codejava</groupId>
+            <artifactId>aiops-infrastructure</artifactId>
         </dependency>
 
-        <!-- Reactor (Flux) for streaming -->
+        <!-- Spring Boot Web -->
         <dependency>
-            <groupId>io.projectreactor</groupId>
-            <artifactId>reactor-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+
+        <!-- Spring AI -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
+            <version>${spring-ai.version}</version>
+        </dependency>
+
+        <!-- SSE is part of Spring Web, no extra dependency needed -->
 
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-        </dependency>
-
-        <!-- SLF4J for logging -->
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
         </dependency>
     </dependencies>
 </project>

@@ -7,14 +7,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
-import top.codejava.aiops.application.port.LlmLocalAiPort;
 import top.codejava.aiops.application.port.LocalEnvironmentPort;
 import top.codejava.aiops.application.port.LlmRemoteBrainPort;
 import top.codejava.aiops.application.port.execution.DaemonInstallerPort;
 import top.codejava.aiops.application.port.execution.OpsExecutorPort;
 import top.codejava.aiops.application.usecase.GeneratePlanUseCase;
-import top.codejava.aiops.application.usecase.LogAnalysisUseCase;
-import top.codejava.aiops.infrastructure.adapter.DynamicLocalAiAdapter;
 import top.codejava.aiops.infrastructure.adapter.DynamicRemoteBrainAdapter;
 import top.codejava.aiops.infrastructure.adapter.LocalEnvironmentScannerAdapter;
 import top.codejava.aiops.infrastructure.adapter.execution.*;
@@ -47,16 +44,6 @@ public class InfrastructureConfiguration {
             @Qualifier("remoteChatModel") ChatLanguageModel remoteChatModel,
             @Qualifier("localChatModel") ChatLanguageModel localChatModel) {
         return new DynamicRemoteBrainAdapter(remoteChatModel, localChatModel);
-    }
-
-    /**
-     * 注册本地AI分析适配器
-     * 用于本地错误日志分析，遵循本地主导架构
-     */
-    @Bean
-    public LlmLocalAiPort llmLocalAiPort(
-            @Qualifier("localChatModel") ChatLanguageModel localChatModel) {
-        return new DynamicLocalAiAdapter(localChatModel);
     }
 
     /**
@@ -125,15 +112,5 @@ public class InfrastructureConfiguration {
             SshExecutorAdapter sshExecutorAdapter,
             Path localJarPath) {
         return new DaemonInstallerAdapter(sshExecutorAdapter, localJarPath);
-    }
-
-    /**
-     * 注册错误日志本地AI分析用例
-     * 本地主导架构：所有AI推理都在本地完成，远程只执行命令
-     */
-    @Bean
-    public LogAnalysisUseCase logAnalysisUseCase(
-            LlmLocalAiPort llmLocalAiPort) {
-        return new LogAnalysisUseCase(llmLocalAiPort);
     }
 }

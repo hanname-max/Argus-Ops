@@ -11,6 +11,10 @@
     <file url="file://$PROJECT_DIR$/aiops-domain/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/aiops-infrastructure/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/aiops-infrastructure/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/aiops-type/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/aiops-type/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/aiops-web/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/aiops-web/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
   </component>

@@ -1,5 +1,4 @@
-// aiops-domain/src/main/java/top/codejava/aiops/domain/exception/OpsExecutionException.java
-package top.codejava.aiops.domain.exception;
+package top.codejava.aiops.type.exception;
 
 /**
  * 运维执行异常

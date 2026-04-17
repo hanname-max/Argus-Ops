@@ -12,10 +12,11 @@
     <description>双AI协同自动化运维辅助引擎</description>
 
     <modules>
+        <module>aiops-type</module>
         <module>aiops-domain</module>
         <module>aiops-application</module>
         <module>aiops-infrastructure</module>
-        <module>aiops-cli</module>
+        <module>aiops-web</module>
         <module>aiops-bootstrap</module>
     </modules>
 
@@ -26,8 +27,8 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <spring-boot.version>3.2.8</spring-boot.version>
         <langchain4j.version>0.36.2</langchain4j.version>
-        <picocli.version>4.7.5</picocli.version>
         <lombok.version>1.18.34</lombok.version>
+        <spring-ai.version>0.8.1</spring-ai.version>
     </properties>
 
     <dependencyManagement>
@@ -50,19 +51,21 @@
                 <scope>import</scope>
             </dependency>
 
+            <!-- Spring AI BOM -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- Lombok -->
             <dependency>
                 <groupId>org.projectlombok</groupId>
                 <artifactId>lombok</artifactId>
                 <version>${lombok.version}</version>
                 <scope>provided</scope>
-            </dependency>
-
-            <!-- Picocli -->
-            <dependency>
-                <groupId>info.picocli</groupId>
-                <artifactId>picocli-spring-boot-starter</artifactId>
-                <version>${picocli.version}</version>
             </dependency>
 
             <!-- JSch for SSH -->
@@ -72,7 +75,19 @@
                 <version>0.1.55</version>
             </dependency>
 
+            <!-- Spring AI versions managed by spring-ai-bom BOM -->
+
             <!-- Project modules -->
+            <dependency>
+                <groupId>top.codejava</groupId>
+                <artifactId>aiops-type</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>top.codejava</groupId>
+                <artifactId>aiops-type</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>top.codejava</groupId>
                 <artifactId>aiops-domain</artifactId>
@@ -90,11 +105,35 @@
             </dependency>
             <dependency>
                 <groupId>top.codejava</groupId>
-                <artifactId>aiops-cli</artifactId>
+                <artifactId>aiops-web</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <repositories>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>spring-snapshots</id>
+            <name>Spring Snapshots</name>
+            <url>https://repo.spring.io/snapshot</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>maven-central</id>
+            <name>Maven Central</name>
+            <url>https://repo1.maven.org/maven2</url>
+        </repository>
+    </repositories>
 
     <build>
         <pluginManagement>

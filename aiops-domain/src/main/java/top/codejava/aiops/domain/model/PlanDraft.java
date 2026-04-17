@@ -20,6 +20,11 @@ import java.util.List;
 public class PlanDraft {
 
     /**
+     * 关联的项目上下文
+     */
+    private ProjectContext projectContext;
+
+    /**
      * 生成时间
      */
     private LocalDateTime generatedAt;
@@ -50,9 +55,19 @@ public class PlanDraft {
     private List<String> kubernetesManifests;
 
     /**
+     * AI 生成的完整内容
+     */
+    private String generatedContent;
+
+    /**
      * 本地AI安全审计是否通过
      */
     private boolean auditPassed;
+
+    /**
+     * 本地AI安全审计结果原文
+     */
+    private String auditResult;
 
     /**
      * 本地AI安全审计发现的问题

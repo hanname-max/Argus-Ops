@@ -10,7 +10,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 import top.codejava.aiops.application.port.execution.LogStreamCallback;
 import top.codejava.aiops.application.port.execution.OpsExecutorPort;
-import top.codejava.aiops.domain.exception.OpsExecutionException;
+import top.codejava.aiops.type.exception.OpsExecutionException;
 import top.codejava.aiops.domain.execution.ExecutionResult;
 import top.codejava.aiops.domain.execution.ShellCommand;
 import top.codejava.aiops.domain.execution.TargetServer;

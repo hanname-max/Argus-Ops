@@ -10,6 +10,7 @@ import java.time.Duration;
 
 /**
  * Anthropic Claude 聊天模型提供商
+ * 兼容火山引擎 ARK (ByteDance ARK)
  */
 @Component
 public class AnthropicChatModelProvider implements ChatModelProvider {
@@ -35,6 +36,8 @@ public class AnthropicChatModelProvider implements ChatModelProvider {
                 .timeout(Duration.ofMinutes(5));
 
         if (baseUrl != null && !baseUrl.isBlank()) {
+            // 火山引擎 ARK 对代码模型已经包含完整版本路径，需要确保正确拼接
+            // 如果 baseUrl 已经是类似 ".../v3"，langchain4j 会自动追加 "/messages"
             builder.baseUrl(baseUrl);
         }
 

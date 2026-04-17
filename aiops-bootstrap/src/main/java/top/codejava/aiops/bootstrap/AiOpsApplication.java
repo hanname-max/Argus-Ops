@@ -1,28 +1,17 @@
 // aiops-bootstrap/src/main/java/top/codejava/aiops/bootstrap/AiOpsApplication.java
 package top.codejava.aiops.bootstrap;
 
-import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import picocli.CommandLine;
-
-import java.util.concurrent.Callable;
 
 /**
  * AIOps-Engine Bootstrap Entry
- * Build CLI application using Spring Boot + Picocli
+ * Web 应用入口，提供 REST API 服务
  */
 @SpringBootApplication(scanBasePackages = "top.codejava.aiops")
-public class AiOpsApplication implements CommandLineRunner {
-
-    private final CommandLine.IFactory commandLineFactory;
-    private final CommandRegistrar commandRegistrar;
-
-    public AiOpsApplication(CommandLine.IFactory commandLineFactory,
-                           CommandRegistrar commandRegistrar) {
-        this.commandLineFactory = commandLineFactory;
-        this.commandRegistrar = commandRegistrar;
-    }
+@org.springframework.data.jpa.repository.config.EnableJpaRepositories(basePackages = "top.codejava.aiops")
+@org.springframework.boot.autoconfigure.domain.EntityScan(basePackages = "top.codejava.aiops")
+public class AiOpsApplication {
 
     public static void main(String[] args) {
         // 零配置终端编码自适应：解决Windows CMD中文乱码问题
@@ -67,52 +56,6 @@ public class AiOpsApplication implements CommandLineRunner {
         } catch (Exception e) {
             // Any exception fails silently, doesn't affect normal startup
             // Worst case: still garbled, but won't crash
-        }
-    }
-
-    @Override
-    public void run(String... args) {
-        CommandLine commandLine = new CommandLine(new RootCommand(), commandLineFactory);
-        commandRegistrar.registerCommands(commandLine);
-        int exitCode = commandLine.execute(args);
-        // Exit after CLI execution completes
-        System.exit(exitCode);
-    }
-
-    /**
-     * Root command container
-     */
-    @picocli.CommandLine.Command(name = "aiops",
-                                 description = "AIOps-Engine - Dual-AI collaborative automated operation and maintenance assistant",
-                                 version = "1.0.0-SNAPSHOT",
-                                 mixinStandardHelpOptions = true)
-    public static class RootCommand implements Callable<Integer> {
-
-        @Override
-        public Integer call() {
-            // 无参数时显示帮助
-            return 0;
-        }
-    }
-
-    /**
-     * Command Registrar
-     * Register all CLI commands under the root command
-     */
-    @org.springframework.stereotype.Component
-    public static class CommandRegistrar {
-        private final top.codejava.aiops.cli.command.PlanCommand planCommand;
-        private final top.codejava.aiops.cli.command.DeployCommand deployCommand;
-
-        public CommandRegistrar(top.codejava.aiops.cli.command.PlanCommand planCommand,
-                               top.codejava.aiops.cli.command.DeployCommand deployCommand) {
-            this.planCommand = planCommand;
-            this.deployCommand = deployCommand;
-        }
-
-        public void registerCommands(CommandLine rootCommand) {
-            rootCommand.addSubcommand(planCommand);
-            rootCommand.addSubcommand(deployCommand);
         }
     }
 }

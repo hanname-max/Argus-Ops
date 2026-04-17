@@ -26,7 +26,12 @@
       "Bash(timeout 20 java -jar aiops-bootstrap/target/aiops-bootstrap-1.0.0-SNAPSHOT.jar)",
       "Bash(echo \"Timeout/Exit: $?\")",
       "Bash(timeout 20 java:*)",
-      "Bash(java:*)"
+      "Bash(java:*)",
+      "Bash(cmd //c deploy-to-remote.bat)",
+      "Bash(cmd *)",
+      "Bash(taskkill /F /IM java.exe)",
+      "Bash(find D:codenewGMArgus-Ops *)",
+      "Bash(find D:\\\\codenew\\\\GM\\\\Argus-Ops *)"
     ]
   }
 }

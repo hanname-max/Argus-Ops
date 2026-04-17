@@ -4,6 +4,7 @@ package top.codejava.aiops.infrastructure.adapter;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Flux;
 import top.codejava.aiops.application.port.LlmRemoteBrainPort;
 import top.codejava.aiops.domain.model.PlanDraft;
 import top.codejava.aiops.domain.model.ProjectContext;
@@ -37,7 +38,9 @@ public class DynamicRemoteBrainAdapter implements LlmRemoteBrainPort {
         String response = remoteChatModel.generate(prompt);
 
         return PlanDraft.builder()
+                .projectContext(context)
                 .generatedAt(LocalDateTime.now())
+                .generatedContent(response)
                 .rawResponse(response)
                 // 解析响应提取结构化信息的简化版本
                 // 完整实现可使用Parser提取结构化数据
@@ -45,6 +48,13 @@ public class DynamicRemoteBrainAdapter implements LlmRemoteBrainPort {
                 .dockerfileContent(extractDockerfile(response))
                 .auditPassed(false)
                 .build();
+    }
+
+    @Override
+    public Flux<String> generateDeploymentPlanStream(ProjectContext context) {
+        // LangChain4j 不支持流式在 ChatLanguageModel 接口，本适配器不支持流式
+        // 流式由 Spring AI 适配器实现
+        throw new UnsupportedOperationException("Streaming not supported by LangChain4j adapter, use Spring AI adapter");
     }
 
     @Override
@@ -59,10 +69,17 @@ public class DynamicRemoteBrainAdapter implements LlmRemoteBrainPort {
 
         List<String> findings = parseAuditFindings(response);
 
+        planDraft.setAuditResult(response);
         planDraft.setAuditPassed(passed);
         planDraft.setAuditFindings(findings);
 
         return planDraft;
+    }
+
+    @Override
+    public Flux<String> analyzeErrorLogStream(String logContent) {
+        // LangChain4j 不支持流式，本适配器不支持
+        throw new UnsupportedOperationException("Streaming not supported by LangChain4j adapter, use Spring AI adapter");
     }
 
     /**
@@ -88,8 +105,8 @@ public class DynamicRemoteBrainAdapter implements LlmRemoteBrainPort {
 
                 Format your response in clear markdown.
                 """,
+                context.getRootPath().toAbsolutePath().toString(),
                 context.getPrimaryLanguage(),
-                context.getBuildTool(),
                 context.isHasDockerfile(),
                 context.isHasDockerCompose(),
                 context.getEstimatedLinesOfCode(),
@@ -120,7 +137,7 @@ public class DynamicRemoteBrainAdapter implements LlmRemoteBrainPort {
 
                 End your response with either: AUDIT PASSED or AUDIT FAILED.
                 If FAILED, list the specific findings.
-                """, draft.getRawResponse()
+                """, draft.getGeneratedContent()
         );
     }
 
