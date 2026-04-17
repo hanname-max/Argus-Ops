@@ -1,129 +1,22 @@
-# AIOps-Engine 配置示例
-# 双AI协同：远程负责生成规划，本地负责安全审计
-# ========================================
-# 支持任意组合：
-#  1. 远程Claude + 本地Ollama    (推荐默认方案)
-#  2. 远程OpenAI + 本地Ollama
-#  3. 双云端: 远程Claude + 本地OpenAI (用云端做审计)
-#  4. 双本地: 远程Ollama(大模型) + 本地Ollama(小模型) 完全离线
-#  5. 其他提供商: Gemini, 通义千问, DeepSeek, Mistral, 文心一言
-# ========================================
-# 配置说明：
-#  - 云端API：需要配置 api-key，base-url 可选（自定义代理地址）
-#  - 本地部署：需要配置 base-url，api-key 可选
-#  - 任何提供商都可以用于 remote 或 local，完全灵活
-# ========================================
+server:
+  port: 8080
+
+spring:
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:sk-placeholder}
 
 aiops:
-  # 远程AI配置（负责架构规划和脚本生成）
-  remote:
-    active-provider: claude
-    api-key: you-api-key
-    base-url: you-base-url
-    model-name: you-model-name
-    temperature: 0.7
-    max-tokens: 4096
-
-  # 本地AI配置（负责上下文扫描和安全审计）
   local:
-    active-provider: ollama
-    base-url: http://localhost:11434
-    model-name: llama3
-    temperature: 0.3
-    max-tokens: 2048
+    base-url: ${LOCAL_AI_BASE_URL:https://api.openai.com/v1}
+    api-key: ${LOCAL_AI_KEY:sk-placeholder}
+    model: ${LOCAL_AI_MODEL:gpt-4o-mini}
+  remote:
+    base-url: ${REMOTE_AI_BASE_URL:https://api.openai.com/v1}
+    api-key: ${REMOTE_AI_KEY:sk-placeholder}
+    model: ${REMOTE_AI_MODEL:gpt-4o-mini}
 
-# ========================================
-# 各提供商配置参考（复制修改即可）
-# ========================================
-
-# --- OpenAI 配置示例 ---
-# aiops:
-#   remote:
-#     active-provider: openai
-#     api-key: ${OPENAI_API_KEY:your-openai-api-key}
-#     # base-url: (可选，自定义代理或Azure OpenAI兼容地址)
-#     model-name: gpt-4o
-#     temperature: 0.7
-#     max-tokens: 4096
-
-# --- Google Gemini 配置示例 ---
-# aiops:
-#   remote:
-#     active-provider: gemini
-#     api-key: ${GOOGLE_API_KEY:your-google-api-key}
-#     model-name: gemini-1.5-pro
-#     temperature: 0.7
-#     max-tokens: 4096
-
-# --- 阿里云通义千问配置示例 ---
-# aiops:
-#   remote:
-#     active-provider: dashscope
-#     api-key: ${DASHSCOPE_API_KEY:your-dashscope-api-key}
-#     model-name: qwen-max
-#     temperature: 0.7
-#     max-tokens: 4096
-
-# --- DeepSeek 配置示例 ---
-# aiops:
-#   remote:
-#     active-provider: deepseek
-#     api-key: ${DEEPSEEK_API_KEY:your-deepseek-api-key}
-#     model-name: deepseek-chat
-#     temperature: 0.7
-#     max-tokens: 4096
-
-# --- Mistral AI 配置示例 ---
-# aiops:
-#   remote:
-#     active-provider: mistral
-#     api-key: ${MISTRAL_API_KEY:your-mistral-api-key}
-#     model-name: mistral-large
-#     temperature: 0.7
-#     max-tokens: 4096
-
-# --- 百度文心一言配置示例 ---
-# aiops:
-#   remote:
-#     active-provider: wenxin
-#     api-key: ${WENXIN_API_KEY:your-wenxin-api-key}
-#     secret-key: ${WENXIN_SECRET_KEY:your-wenxin-secret}
-#     model-name: ernie-3.5-8k
-#     temperature: 0.7
-#     max-tokens: 4096
-
-# --- LMStudio 本地部署示例 ---
-# aiops:
-#   local:
-#     active-provider: lmstudio
-#     base-url: http://localhost:1234/v1
-#     model-name: default
-#     temperature: 0.3
-#     max-tokens: 2048
-
-# --- 完全离线双Ollama配置示例 ---
-# aiops:
-#   remote:
-#     active-provider: ollama
-#     base-url: http://localhost:11434
-#     model-name: qwen2:72b
-#     temperature: 0.7
-#     max-tokens: 4096
-#   local:
-#     active-provider: ollama
-#     base-url: http://localhost:11434
-#     model-name: llama3:8b
-#     temperature: 0.3
-#     max-tokens: 2048
-
-# 禁止启动Web服务器（这是命令行应用，只需要RestTemplate客户端功能）
-spring:
-  main:
-    web-application-type: none
-
-# 日志配置
 logging:
   level:
     root: INFO
-    top.codejava: DEBUG
-    dev.langchain4j: INFO
+    top.codejava.aiops: INFO
