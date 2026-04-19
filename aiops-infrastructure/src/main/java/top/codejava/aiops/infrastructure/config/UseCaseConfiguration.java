@@ -5,7 +5,13 @@ import org.springframework.context.annotation.Configuration;
 import top.codejava.aiops.application.port.LocalAiPort;
 import top.codejava.aiops.application.port.RemoteAiAssistPort;
 import top.codejava.aiops.application.port.RemoteCommandPort;
+import top.codejava.aiops.application.port.WorkflowLocalAnalysisPort;
+import top.codejava.aiops.application.port.WorkflowLogAnalysisPort;
+import top.codejava.aiops.application.port.WorkflowScriptGenerationPort;
+import top.codejava.aiops.application.port.WorkflowSessionPort;
+import top.codejava.aiops.application.port.WorkflowTargetProbePort;
 import top.codejava.aiops.application.usecase.OpsUseCase;
+import top.codejava.aiops.application.usecase.WorkflowUseCase;
 
 @Configuration
 public class UseCaseConfiguration {
@@ -15,5 +21,20 @@ public class UseCaseConfiguration {
                                  RemoteAiAssistPort remoteAiAssistPort,
                                  RemoteCommandPort remoteCommandPort) {
         return new OpsUseCase(localAiPort, remoteAiAssistPort, remoteCommandPort);
+    }
+
+    @Bean
+    public WorkflowUseCase workflowUseCase(WorkflowSessionPort workflowSessionPort,
+                                           WorkflowLocalAnalysisPort workflowLocalAnalysisPort,
+                                           WorkflowTargetProbePort workflowTargetProbePort,
+                                           WorkflowScriptGenerationPort workflowScriptGenerationPort,
+                                           WorkflowLogAnalysisPort workflowLogAnalysisPort) {
+        return new WorkflowUseCase(
+                workflowSessionPort,
+                workflowLocalAnalysisPort,
+                workflowTargetProbePort,
+                workflowScriptGenerationPort,
+                workflowLogAnalysisPort
+        );
     }
 }

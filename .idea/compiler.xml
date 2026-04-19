@@ -8,10 +8,15 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="aiops-type" />
-        <module name="aiops-application" />
         <module name="aiops-bootstrap" />
         <module name="aiops-infrastructure" />
         <module name="aiops-web" />
+      </profile>
+      <profile name="Annotation profile for aiops-parent" enabled="true">
+        <sourceOutputDir name="../.build/aiops-application/generated-sources/annotations" />
+        <sourceTestOutputDir name="../.build/aiops-application/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="aiops-application" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>

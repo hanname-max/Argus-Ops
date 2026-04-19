@@ -17,5 +17,13 @@
             <artifactId>aiops-type</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
+        </dependency>
     </dependencies>
+
+    <build>
+        <directory>../.build/aiops-application</directory>
+    </build>
 </project>

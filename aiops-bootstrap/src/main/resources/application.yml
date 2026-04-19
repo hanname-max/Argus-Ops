@@ -4,17 +4,17 @@ server:
 spring:
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY:sk-placeholder}
+      api-key: ${OPENAI_API_KEY:${LOCAL_AI_KEY:6e61acd2-be78-4eea-92a3-237a7b370943}}
 
 aiops:
   local:
-    base-url: ${LOCAL_AI_BASE_URL:https://api.openai.com/v1}
-    api-key: ${LOCAL_AI_KEY:sk-placeholder}
-    model: ${LOCAL_AI_MODEL:gpt-4o-mini}
+    base-url: ${LOCAL_AI_BASE_URL:https://ark.cn-beijing.volces.com/api/v3/chat/completions}
+    api-key: ${LOCAL_AI_KEY:6e61acd2-be78-4eea-92a3-237a7b370943}
+    model: ${LOCAL_AI_MODEL:glm-4-7-251222}
   remote:
-    base-url: ${REMOTE_AI_BASE_URL:https://api.openai.com/v1}
-    api-key: ${REMOTE_AI_KEY:sk-placeholder}
-    model: ${REMOTE_AI_MODEL:gpt-4o-mini}
+    base-url: ${REMOTE_AI_BASE_URL:https://ark.cn-beijing.volces.com/api/v3/chat/completions}
+    api-key: ${REMOTE_AI_KEY:${LOCAL_AI_KEY:6e61acd2-be78-4eea-92a3-237a7b370943}}
+    model: ${REMOTE_AI_MODEL:glm-4-7-251222}
 
 logging:
   level:
