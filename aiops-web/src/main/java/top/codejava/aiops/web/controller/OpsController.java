@@ -51,6 +51,7 @@ public class OpsController {
                 request.command(),
                 request.useSudo(),
                 request.sudoPassword(),
+                request.applicationPort(),
                 request.workflowId(),
                 request.projectPath()
         ));

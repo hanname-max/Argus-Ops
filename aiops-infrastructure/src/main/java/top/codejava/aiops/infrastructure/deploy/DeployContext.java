@@ -17,6 +17,9 @@ public class DeployContext {
     private final List<String> progressMessages = new ArrayList<>();
 
     private Path localBundlePath;
+    private String renderedDeployCommand;
+    private boolean dockerInstalled;
+    private SshExecutionSummary executionSummary;
 
     public DeployContext(RemoteDeployRequest request) {
         this.request = request;
@@ -58,5 +61,32 @@ public class DeployContext {
 
     public void localBundlePath(Path localBundlePath) {
         this.localBundlePath = localBundlePath;
+    }
+
+    public String renderedDeployCommand() {
+        return renderedDeployCommand;
+    }
+
+    public void renderedDeployCommand(String renderedDeployCommand) {
+        this.renderedDeployCommand = renderedDeployCommand;
+    }
+
+    public boolean dockerInstalled() {
+        return dockerInstalled;
+    }
+
+    public void dockerInstalled(boolean dockerInstalled) {
+        this.dockerInstalled = dockerInstalled;
+    }
+
+    public SshExecutionSummary executionSummary() {
+        return executionSummary;
+    }
+
+    public void executionSummary(SshExecutionSummary executionSummary) {
+        this.executionSummary = executionSummary;
+    }
+
+    public record SshExecutionSummary(boolean success, String stdout, String stderr) {
     }
 }

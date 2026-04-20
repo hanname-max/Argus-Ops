@@ -8,6 +8,7 @@ public record DeployApiRequest(
         String command,
         boolean useSudo,
         String sudoPassword,
+        Integer applicationPort,
         String workflowId,
         String projectPath
 ) {
