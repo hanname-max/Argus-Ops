@@ -48,7 +48,9 @@ public class OpsController {
                 request.port(),
                 request.username(),
                 request.password(),
-                request.command()
+                request.command(),
+                request.useSudo(),
+                request.sudoPassword()
         ));
     }
 }

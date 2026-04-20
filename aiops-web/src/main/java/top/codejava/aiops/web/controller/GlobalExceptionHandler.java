@@ -48,7 +48,7 @@ public class GlobalExceptionHandler {
 
     private HttpStatus resolveStatus(ErrorCode errorCode) {
         return switch (errorCode) {
-            case LOCAL_AI_FAILURE, REMOTE_AI_FAILURE, REMOTE_EXEC_FAILURE -> HttpStatus.BAD_GATEWAY;
+            case LOCAL_AI_FAILURE, REMOTE_AI_FAILURE, REMOTE_EXEC_FAILURE, SSH_CONNECTION_FAILURE -> HttpStatus.BAD_GATEWAY;
             case INVALID_INPUT -> HttpStatus.BAD_REQUEST;
         };
     }
