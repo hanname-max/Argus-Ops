@@ -27,6 +27,24 @@ public class SshProfileProbeNode implements ProbeNode {
             else
               JAVA_VERSION_VALUE=
             fi
+            if command -v docker >/dev/null 2>&1; then
+              DOCKER_INSTALLED_VALUE=true
+              DOCKER_VERSION_VALUE=$(docker --version 2>/dev/null | head -n 1)
+              if docker info >/dev/null 2>&1; then
+                DOCKER_DIRECT_VALUE=true
+              else
+                DOCKER_DIRECT_VALUE=false
+              fi
+            else
+              DOCKER_INSTALLED_VALUE=false
+              DOCKER_VERSION_VALUE=
+              DOCKER_DIRECT_VALUE=false
+            fi
+            if [ "$(id -u)" = "0" ] || sudo -n true >/dev/null 2>&1; then
+              CAN_USE_SUDO_VALUE=true
+            else
+              CAN_USE_SUDO_VALUE=false
+            fi
             SHELL_VALUE=${SHELL##*/}
             if [ -z "$SHELL_VALUE" ]; then
               SHELL_VALUE=$(ps -p $$ -o comm= 2>/dev/null | head -n 1 | tr -d ' ')
@@ -38,6 +56,10 @@ public class SshProfileProbeNode implements ProbeNode {
             printf 'AIOPS_TOTAL_MEM_MB=%s\\n' "$TOTAL_MEM_VALUE"
             printf 'AIOPS_FREE_MEM_MB=%s\\n' "$FREE_MEM_VALUE"
             printf 'AIOPS_JAVA_VERSION=%s\\n' "$JAVA_VERSION_VALUE"
+            printf 'AIOPS_DOCKER_INSTALLED=%s\\n' "$DOCKER_INSTALLED_VALUE"
+            printf 'AIOPS_DOCKER_VERSION=%s\\n' "$DOCKER_VERSION_VALUE"
+            printf 'AIOPS_DOCKER_DIRECT=%s\\n' "$DOCKER_DIRECT_VALUE"
+            printf 'AIOPS_CAN_USE_SUDO=%s\\n' "$CAN_USE_SUDO_VALUE"
             printf 'AIOPS_SHELL=%s\\n' "$SHELL_VALUE"
             """;
 

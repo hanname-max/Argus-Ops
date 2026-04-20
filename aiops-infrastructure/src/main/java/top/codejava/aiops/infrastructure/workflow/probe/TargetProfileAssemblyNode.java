@@ -19,7 +19,11 @@ public class TargetProfileAssemblyNode implements ProbeNode {
                 parseLong(context.profileValues().get("AIOPS_TOTAL_MEM_MB"), 0L),
                 parseLong(context.profileValues().get("AIOPS_FREE_MEM_MB"), 0L),
                 resolveJavaVersion(context.profileValues().get("AIOPS_JAVA_VERSION"), context.localContext()),
-                valueOrDefault(context.profileValues().get("AIOPS_SHELL"), "bash")
+                valueOrDefault(context.profileValues().get("AIOPS_SHELL"), "bash"),
+                parseBoolean(context.profileValues().get("AIOPS_DOCKER_INSTALLED")),
+                valueOrDefault(context.profileValues().get("AIOPS_DOCKER_VERSION"), null),
+                parseBoolean(context.profileValues().get("AIOPS_DOCKER_DIRECT")),
+                parseBoolean(context.profileValues().get("AIOPS_CAN_USE_SUDO"))
         ));
     }
 
@@ -43,5 +47,9 @@ public class TargetProfileAssemblyNode implements ProbeNode {
 
     private String valueOrDefault(String value, String defaultValue) {
         return value == null || value.isBlank() ? defaultValue : value;
+    }
+
+    private boolean parseBoolean(String rawValue) {
+        return rawValue != null && Boolean.parseBoolean(rawValue.trim());
     }
 }

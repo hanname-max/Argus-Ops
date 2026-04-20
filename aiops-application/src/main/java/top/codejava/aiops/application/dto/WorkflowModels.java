@@ -145,7 +145,11 @@ public final class WorkflowModels {
             Long totalMemoryMb,
             Long freeMemoryMb,
             String detectedJavaVersion,
-            String detectedShell
+            String detectedShell,
+            boolean dockerInstalled,
+            String dockerVersion,
+            boolean canUseDockerDirectly,
+            boolean canUseSudo
     ) {
     }
 
@@ -188,12 +192,6 @@ public final class WorkflowModels {
             WorkflowStateSnapshot state,
             String message,
             Instant emittedAt
-    ) {
-    }
-
-    public record ScriptStreamStart(
-            ScriptGenerationMetadata metadata,
-            List<WorkflowWarning> warnings
     ) {
     }
 
