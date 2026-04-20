@@ -50,7 +50,9 @@ public class OpsController {
                 request.password(),
                 request.command(),
                 request.useSudo(),
-                request.sudoPassword()
+                request.sudoPassword(),
+                request.workflowId(),
+                request.projectPath()
         ));
     }
 }

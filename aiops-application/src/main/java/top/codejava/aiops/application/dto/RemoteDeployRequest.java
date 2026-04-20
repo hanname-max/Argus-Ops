@@ -7,6 +7,8 @@ public record RemoteDeployRequest(
         String password,
         String command,
         boolean useSudo,
-        String sudoPassword
+        String sudoPassword,
+        String workflowId,
+        String projectPath
 ) {
 }
