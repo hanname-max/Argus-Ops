@@ -44,3 +44,7 @@ out/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Committed runtime package for direct download
+!release/
+!release/*.jar
