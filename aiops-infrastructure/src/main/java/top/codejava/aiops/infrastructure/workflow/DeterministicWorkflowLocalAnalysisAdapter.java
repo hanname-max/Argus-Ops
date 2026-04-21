@@ -32,7 +32,11 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
         boolean hasPom = rootEntries.contains("pom.xml");
         boolean hasGradle = rootEntries.contains("build.gradle") || rootEntries.contains("build.gradle.kts");
         boolean hasPackageJson = rootEntries.contains("package.json");
-        boolean hasPyproject = rootEntries.contains("pyproject.toml") || rootEntries.contains("requirements.txt");
+        boolean hasPythonProject = rootEntries.contains("pyproject.toml")
+                || rootEntries.contains("requirements.txt")
+                || rootEntries.contains("manage.py")
+                || rootEntries.contains("app.py")
+                || rootEntries.contains("main.py");
         boolean hasGoMod = rootEntries.contains("go.mod");
         boolean hasCargo = rootEntries.contains("cargo.toml");
         boolean hasIndexHtml = rootEntries.contains("index.html");
@@ -60,10 +64,10 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
             language = "JavaScript";
             buildTool = detectNodeBuildTool(rootEntries);
             framework = detectNodeFramework(projectPath);
-            packaging = framework.contains("Next") ? "node-runtime" : "frontend-bundle";
+            packaging = framework.contains("Next") || framework.contains("Service") ? "node-runtime" : "frontend-bundle";
             defaultPort = framework.contains("Next") ? 3000 : 8080;
             components.add(new WorkflowModels.StackComponent(framework, null, "web-framework"));
-        } else if (hasPyproject) {
+        } else if (hasPythonProject) {
             language = "Python";
             buildTool = "pip";
             framework = detectPythonFramework(fileNames);
@@ -142,6 +146,9 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
         String packageJson = readIfExists(projectPath.resolve("package.json")).toLowerCase(Locale.ROOT);
         if (packageJson.contains("\"next\"")) {
             return "Next.js";
+        }
+        if (packageJson.contains("\"express\"") || packageJson.contains("\"koa\"") || packageJson.contains("\"fastify\"") || packageJson.contains("\"@nestjs/core\"")) {
+            return "Node Service";
         }
         if (packageJson.contains("\"react\"")) {
             return "React";
