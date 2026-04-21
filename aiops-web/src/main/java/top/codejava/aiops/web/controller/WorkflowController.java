@@ -20,7 +20,7 @@ import top.codejava.aiops.application.usecase.WorkflowUseCase;
  * response typing.
  *
  * <p>Workflow state order is fixed:
- * ANALYZE_LOCAL -> PROBE_TARGET -> STREAM_SCRIPT -> ANALYZE_LOG.
+ * PREPARE_LOCAL -> PROBE_REMOTE -> DEPLOY_EXECUTION.
  */
 @RestController
 @RequestMapping("/api/v1/workflow")
@@ -39,7 +39,7 @@ public class WorkflowController {
      * 1. scan the local project in read-only mode;
      * 2. infer language, framework, packaging, JDK, and default application port;
      * 3. persist reusable workflow context for the next stages;
-     * 4. move the state machine to ANALYZE_LOCAL/COMPLETED.
+     * 4. move the state machine to PREPARE_LOCAL/COMPLETED.
      *
      * <p>Anti-footgun design:
      * the application layer must not launch the web process or connect to a real database.

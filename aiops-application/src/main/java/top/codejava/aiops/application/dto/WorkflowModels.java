@@ -240,10 +240,9 @@ public final class WorkflowModels {
     }
 
     public enum WorkflowStage {
-        ANALYZE_LOCAL,
-        PROBE_TARGET,
-        STREAM_SCRIPT,
-        ANALYZE_LOG
+        PREPARE_LOCAL,
+        PROBE_REMOTE,
+        DEPLOY_EXECUTION
     }
 
     public enum WorkflowStageStatus {

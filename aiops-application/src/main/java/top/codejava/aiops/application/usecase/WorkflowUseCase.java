@@ -18,10 +18,9 @@ import top.codejava.aiops.type.exception.ValidationException;
 public class WorkflowUseCase {
 
     private static final List<WorkflowModels.WorkflowStage> ORDERED_STAGES = List.of(
-            WorkflowModels.WorkflowStage.ANALYZE_LOCAL,
-            WorkflowModels.WorkflowStage.PROBE_TARGET,
-            WorkflowModels.WorkflowStage.STREAM_SCRIPT,
-            WorkflowModels.WorkflowStage.ANALYZE_LOG
+            WorkflowModels.WorkflowStage.PREPARE_LOCAL,
+            WorkflowModels.WorkflowStage.PROBE_REMOTE,
+            WorkflowModels.WorkflowStage.DEPLOY_EXECUTION
     );
 
     private final WorkflowSessionPort workflowSessionPort;
@@ -64,10 +63,10 @@ public class WorkflowUseCase {
         WorkflowModels.WorkflowSession saved = workflowSessionPort.save(new WorkflowModels.WorkflowSession(
                 workflowId,
                 nextVersion(existingSession),
-                WorkflowModels.WorkflowStage.ANALYZE_LOCAL,
+                WorkflowModels.WorkflowStage.PREPARE_LOCAL,
                 WorkflowModels.WorkflowStageStatus.COMPLETED,
-                List.of(WorkflowModels.WorkflowStage.ANALYZE_LOCAL),
-                "Local deep analysis completed. Target probing is now allowed.",
+                List.of(WorkflowModels.WorkflowStage.PREPARE_LOCAL),
+                "Local preparation completed. Remote probing is now allowed.",
                 Instant.now(),
                 payload.context(),
                 null,
@@ -88,7 +87,7 @@ public class WorkflowUseCase {
 
         WorkflowModels.WorkflowSession session = requiredSession(request.workflowId());
         assertVersion(session, request.expectedStateVersion());
-        requireCompleted(session, WorkflowModels.WorkflowStage.ANALYZE_LOCAL);
+        requireCompleted(session, WorkflowModels.WorkflowStage.PREPARE_LOCAL);
 
         Integer defaultPort = request.defaultApplicationPort() != null
                 ? request.defaultApplicationPort()
@@ -105,10 +104,10 @@ public class WorkflowUseCase {
         WorkflowModels.WorkflowSession saved = workflowSessionPort.save(new WorkflowModels.WorkflowSession(
                 session.workflowId(),
                 nextVersion(session),
-                WorkflowModels.WorkflowStage.PROBE_TARGET,
+                WorkflowModels.WorkflowStage.PROBE_REMOTE,
                 WorkflowModels.WorkflowStageStatus.COMPLETED,
-                appendCompletedStage(session.completedStages(), WorkflowModels.WorkflowStage.PROBE_TARGET),
-                "Target probing completed. Script streaming is now allowed.",
+                appendCompletedStage(session.completedStages(), WorkflowModels.WorkflowStage.PROBE_REMOTE),
+                "Remote probing completed. Deployment execution is now allowed.",
                 Instant.now(),
                 session.localContext(),
                 payload.targetProfile(),
@@ -131,16 +130,16 @@ public class WorkflowUseCase {
 
         WorkflowModels.WorkflowSession session = requiredSession(request.workflowId());
         assertVersion(session, request.expectedStateVersion());
-        requireCompleted(session, WorkflowModels.WorkflowStage.PROBE_TARGET);
+        requireCompleted(session, WorkflowModels.WorkflowStage.PROBE_REMOTE);
 
         WorkflowModels.ScriptGenerationMetadata metadata = buildMetadata(session);
         WorkflowModels.WorkflowSession runningSession = new WorkflowModels.WorkflowSession(
                 session.workflowId(),
                 session.stateVersion(),
-                WorkflowModels.WorkflowStage.STREAM_SCRIPT,
+                WorkflowModels.WorkflowStage.DEPLOY_EXECUTION,
                 WorkflowModels.WorkflowStageStatus.RUNNING,
                 session.completedStages(),
-                "AI script generation is streaming.",
+                "Deployment preview is streaming.",
                 Instant.now(),
                 session.localContext(),
                 session.targetProfile(),
@@ -160,7 +159,7 @@ public class WorkflowUseCase {
 
         WorkflowModels.ScriptStreamEvent startEvent = new WorkflowModels.ScriptStreamEvent(
                 session.workflowId(),
-                WorkflowModels.WorkflowStage.STREAM_SCRIPT,
+                WorkflowModels.WorkflowStage.DEPLOY_EXECUTION,
                 WorkflowModels.ScriptStreamEventType.START,
                 0,
                 null,
@@ -173,7 +172,7 @@ public class WorkflowUseCase {
         Flux<WorkflowModels.ScriptStreamEvent> tokenEvents = workflowScriptGenerationPort.streamScript(generationRequest)
                 .map(chunk -> new WorkflowModels.ScriptStreamEvent(
                         session.workflowId(),
-                        WorkflowModels.WorkflowStage.STREAM_SCRIPT,
+                        WorkflowModels.WorkflowStage.DEPLOY_EXECUTION,
                         WorkflowModels.ScriptStreamEventType.TOKEN,
                         sequence.getAndIncrement(),
                         chunk,
@@ -187,10 +186,10 @@ public class WorkflowUseCase {
             WorkflowModels.WorkflowSession completed = workflowSessionPort.save(new WorkflowModels.WorkflowSession(
                     session.workflowId(),
                     nextVersion(session),
-                    WorkflowModels.WorkflowStage.STREAM_SCRIPT,
+                    WorkflowModels.WorkflowStage.DEPLOY_EXECUTION,
                     WorkflowModels.WorkflowStageStatus.COMPLETED,
-                    appendCompletedStage(session.completedStages(), WorkflowModels.WorkflowStage.STREAM_SCRIPT),
-                    "Script generation completed. Log analysis is now allowed.",
+                    appendCompletedStage(session.completedStages(), WorkflowModels.WorkflowStage.DEPLOY_EXECUTION),
+                    "Deployment preview completed.",
                     Instant.now(),
                     session.localContext(),
                     session.targetProfile(),
@@ -199,7 +198,7 @@ public class WorkflowUseCase {
             ));
             return Flux.just(new WorkflowModels.ScriptStreamEvent(
                     session.workflowId(),
-                    WorkflowModels.WorkflowStage.STREAM_SCRIPT,
+                    WorkflowModels.WorkflowStage.DEPLOY_EXECUTION,
                     WorkflowModels.ScriptStreamEventType.COMPLETE,
                     sequence.getAndIncrement(),
                     null,
@@ -215,10 +214,10 @@ public class WorkflowUseCase {
                     WorkflowModels.WorkflowSession failed = workflowSessionPort.save(new WorkflowModels.WorkflowSession(
                             session.workflowId(),
                             nextVersion(session),
-                            WorkflowModels.WorkflowStage.STREAM_SCRIPT,
+                            WorkflowModels.WorkflowStage.DEPLOY_EXECUTION,
                             WorkflowModels.WorkflowStageStatus.FAILED,
                             session.completedStages(),
-                            "Script generation failed.",
+                            "Deployment preview failed.",
                             Instant.now(),
                             session.localContext(),
                             session.targetProfile(),
@@ -227,7 +226,7 @@ public class WorkflowUseCase {
                     ));
                     return Flux.just(new WorkflowModels.ScriptStreamEvent(
                             session.workflowId(),
-                            WorkflowModels.WorkflowStage.STREAM_SCRIPT,
+                            WorkflowModels.WorkflowStage.DEPLOY_EXECUTION,
                             WorkflowModels.ScriptStreamEventType.ERROR,
                             sequence.getAndIncrement(),
                             null,
@@ -252,16 +251,16 @@ public class WorkflowUseCase {
 
         WorkflowModels.WorkflowSession session = requiredSession(request.workflowId());
         assertVersion(session, request.expectedStateVersion());
-        requireCompleted(session, WorkflowModels.WorkflowStage.STREAM_SCRIPT);
+        requireCompleted(session, WorkflowModels.WorkflowStage.DEPLOY_EXECUTION);
 
         WorkflowModels.LogDiagnosisPayload payload = workflowLogAnalysisPort.analyze(request, session);
         WorkflowModels.WorkflowSession saved = workflowSessionPort.save(new WorkflowModels.WorkflowSession(
                 session.workflowId(),
                 nextVersion(session),
-                WorkflowModels.WorkflowStage.ANALYZE_LOG,
+                WorkflowModels.WorkflowStage.DEPLOY_EXECUTION,
                 WorkflowModels.WorkflowStageStatus.COMPLETED,
-                appendCompletedStage(session.completedStages(), WorkflowModels.WorkflowStage.ANALYZE_LOG),
-                "Bilingual log diagnosis completed.",
+                appendCompletedStage(session.completedStages(), WorkflowModels.WorkflowStage.DEPLOY_EXECUTION),
+                "Deployment diagnosis completed.",
                 Instant.now(),
                 session.localContext(),
                 session.targetProfile(),
