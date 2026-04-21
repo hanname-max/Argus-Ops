@@ -1,68 +1,69 @@
-# Argus-Ops 🚀
+# Argus-Ops
 
-> 先解决一个最现实的痛点：很多大学生不是不会用项目，而是先被 `JDK`、`Maven`、打包流程、环境变量这些部署步骤劝退了 😵
->
-> 现在不用先硬着头皮自己编译了，仓库里已经直接放好了可运行的 `jar` 包。拉下代码后，找到包、执行一条命令，就能把服务跑起来 ✨
+Argus-Ops is now packaged as a single runnable `jar`.
 
-## 🎯 这次主打什么
+Users no longer need to:
+- start a separate frontend service
+- install Node.js just to open the UI
+- run two terminals for backend and frontend
 
-- ✅ 把可直接运行的后端 `jar` 提交进仓库
-- ✅ 用户不需要先执行 `mvn package`
-- ✅ 只要本机装了 `JDK 21`，就可以直接启动
-- ✅ 想先体验接口能力，下载包就能开跑
+Download the jar, run it, and open the page. The backend API and the frontend console are served by the same Spring Boot process.
 
-## 📦 下载即跑
+## What Changed
 
-可直接运行的包在这里：
+- The deployment console frontend is now bundled into the Java application
+- The packaged jar can serve:
+  - `/`
+  - `/app.js`
+  - `/app.css`
+  - `/api/...`
+- The app can automatically open the browser on startup on desktop environments
+
+## Quick Start
+
+Runnable package:
 
 ```text
 release/aiops-bootstrap-2.0.0-SNAPSHOT.jar
 ```
 
-### 1. 准备环境
+Requirements:
 
 - `JDK 21`
 
-### 2. 一条命令启动
+Run:
 
 ```powershell
 java -jar .\release\aiops-bootstrap-2.0.0-SNAPSHOT.jar
 ```
 
-### 3. 默认访问地址
+Default addresses:
 
-- 服务地址：`http://127.0.0.1:8080`
-- API 前缀：`http://127.0.0.1:8080/api/v1/ops`
+- UI: `http://127.0.0.1:8080/`
+- API: `http://127.0.0.1:8080/api/v1/ops`
+- Workflow API: `http://127.0.0.1:8080/api/v1/workflow`
 
-## 🧪 30 秒自检
+If the desktop environment is available, the browser will open automatically after startup.
 
-启动后可以先看端口是否起来：
+## 30-Second Check
+
+Check the port:
 
 ```powershell
 Test-NetConnection -ComputerName 127.0.0.1 -Port 8080
 ```
 
-如果看到 `TcpTestSucceeded : True`，说明服务已经成功启动 🎉
-
-## 🖥️ 如果要和 AiOpsWeb 一起跑
-
-后端先启动，然后在 `AiOpsWeb` 目录执行：
+Check backend health:
 
 ```powershell
-npm start
+curl http://127.0.0.1:8080/actuator/health
 ```
 
-再打开：
+If the port is open and the health endpoint returns `{"status":"UP"}`, the single-jar app is ready.
 
-```text
-http://127.0.0.1:3001
-```
+## Optional AI Environment Variables
 
-`AiOpsWeb` 会把 `/api` 请求代理到 `127.0.0.1:8080`，所以后端先起来，前端体验会更顺滑。
-
-## 🤖 AI 环境变量是可选项
-
-如果你暂时只是想把服务跑起来，不配 AI 相关环境变量也能启动；只是部分 AI 增强能力会降级或跳过。
+The application can still start without real AI credentials, but AI-enhanced functions may fall back or be skipped.
 
 ```powershell
 $env:LOCAL_AI_KEY="your-local-key"
@@ -74,30 +75,33 @@ $env:REMOTE_AI_BASE_URL="https://api.openai.com/v1"
 $env:REMOTE_AI_MODEL="gpt-4o-mini"
 ```
 
-## 🛠️ 想自己重新打包也可以
-
-如果你后面要自己改代码，再重新构建：
+## Rebuild From Source
 
 ```powershell
 mvn -DskipTests clean package
 ```
 
-重新生成的启动包默认在：
+The rebuilt jar will be generated at:
 
 ```text
 aiops-bootstrap/target/aiops-bootstrap-2.0.0-SNAPSHOT.jar
 ```
 
-## 🌟 项目能力一眼看懂
+## Core Capabilities
 
-- 🧱 生成构建脚本或 Docker 部署脚本
-- 🔍 检查目标项目运行环境
-- 🪵 过滤和提炼错误日志
-- 🛰️ 通过 SSH 执行远程部署命令
-- 🤝 本地优先，远程 AI 辅助分析
+- local project preparation and stack detection
+- remote host probing over SSH
+- deployment preview generation
+- remote deployment execution
+- important log extraction and diagnosis
 
-## 📌 给第一次上手的同学一句话总结
+## User Experience Goal
 
-别先和 Maven 较劲，也别先研究一堆配置。
+The intended flow is now:
 
-先下载仓库里的 `jar`，跑起来、看到接口通，再慢慢看源码，这样最省时间，也最不容易被部署流程劝退 💡
+1. Download one jar
+2. Run one command
+3. Open one page
+4. Complete the whole deployment flow in one workspace
+
+No extra frontend process is required.
