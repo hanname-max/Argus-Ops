@@ -25,7 +25,7 @@ public class RenderDeployScriptNode implements DeployNode {
         }
 
         String imageName = "argus-" + slugify(projectRoot.getFileName() == null ? "app" : projectRoot.getFileName().toString());
-        String containerName = imageName + "-" + context.workflowId().substring(0, Math.min(8, context.workflowId().length()));
+        String containerName = imageName;
         int hostPort = context.request().applicationPort() == null || context.request().applicationPort() <= 0
                 ? 8080
                 : context.request().applicationPort();
@@ -46,12 +46,16 @@ public class RenderDeployScriptNode implements DeployNode {
                 cd %s
                 %s
                 docker build -t %s:latest .
+                for container_id in $(docker ps -a --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^%s(-|$)/ {print $1}'); do
+                  docker rm -f "$container_id" >/dev/null 2>&1 || true
+                done
                 docker rm -f %s >/dev/null 2>&1 || true
                 docker run -d --restart unless-stopped --name %s -p %d:80 %s:latest
                 docker ps --filter name=%s
                 """.formatted(
                 context.remoteWorkspacePath(),
                 dockerfileBootstrap,
+                imageName,
                 imageName,
                 containerName,
                 containerName,
