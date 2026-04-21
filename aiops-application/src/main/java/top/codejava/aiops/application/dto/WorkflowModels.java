@@ -105,8 +105,51 @@ public final class WorkflowModels {
             String packaging,
             String detectedJdkVersion,
             Integer defaultApplicationPort,
+            PackagingPlan packagingPlan,
+            ConfigurationInspection configurationInspection,
             List<StackComponent> stackComponents,
             List<ConfigEvidence> configEvidences
+    ) {
+    }
+
+    public record PackagingPlan(
+            String strategyKey,
+            boolean requiresPackaging,
+            boolean requiresDependencyInstall,
+            String commandHint,
+            String artifactHint,
+            String reason
+    ) {
+    }
+
+    public record ConfigurationInspection(
+            boolean hasPlaceholderSecrets,
+            boolean requiresSecretInputs,
+            boolean requiresUserConfirmation,
+            String aiSummary,
+            List<RequiredInputPrompt> requiredInputs,
+            List<DetectedConfigCandidate> detectedCandidates
+    ) {
+    }
+
+    public record RequiredInputPrompt(
+            String key,
+            String label,
+            String description,
+            String placeholder,
+            boolean secret
+    ) {
+    }
+
+    public record DetectedConfigCandidate(
+            String id,
+            String category,
+            String location,
+            String key,
+            String valuePreview,
+            String summary,
+            boolean inferred,
+            boolean requiresConfirmation
     ) {
     }
 
