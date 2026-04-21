@@ -1,69 +1,99 @@
-# Argus-Ops
+# Argus-Ops 🚀
 
-Argus-Ops is now packaged as a single runnable `jar`.
+Argus-Ops 现在已经升级成 **单 Jar 启动模式** 啦 ✨  
 
-Users no longer need to:
-- start a separate frontend service
-- install Node.js just to open the UI
-- run two terminals for backend and frontend
+这意味着你不再需要：
+- 再单独启动一个前端服务 😵
+- 为了打开页面先装 Node.js 🤯
+- 开两个终端，一个跑后端，一个跑前端 🥲
 
-Download the jar, run it, and open the page. The backend API and the frontend console are served by the same Spring Boot process.
+现在的目标体验非常直接：
 
-## What Changed
+> **下载一个 Jar → 运行一个命令 → 打开一个页面 → 开始部署流程** 🎯
 
-- The deployment console frontend is now bundled into the Java application
-- The packaged jar can serve:
-  - `/`
-  - `/app.js`
-  - `/app.css`
-  - `/api/...`
-- The app can automatically open the browser on startup on desktop environments
+前端页面和后端 API 都由同一个 Spring Boot 进程提供，真正做到 **一键打开、开箱即用** 💡
 
-## Quick Start
+---
 
-Runnable package:
+## 这次改了什么？🛠️
+
+- ✅ 把部署控制台前端直接打进了 Java 包
+- ✅ `jar` 启动后就能直接访问首页
+- ✅ 不需要再额外跑 `AiOpsWeb`
+- ✅ UI 和 API 改成同源访问，更简单、更稳
+- ✅ 桌面环境下支持启动后自动打开浏览器 🌐
+
+---
+
+## 下载后怎么跑？📦
+
+可直接运行的包就在这里：
 
 ```text
 release/aiops-bootstrap-2.0.0-SNAPSHOT.jar
 ```
 
-Requirements:
+### 1. 准备环境
 
 - `JDK 21`
 
-Run:
+### 2. 一条命令启动
 
 ```powershell
 java -jar .\release\aiops-bootstrap-2.0.0-SNAPSHOT.jar
 ```
 
-Default addresses:
+### 3. 默认访问地址
 
-- UI: `http://127.0.0.1:8080/`
-- API: `http://127.0.0.1:8080/api/v1/ops`
-- Workflow API: `http://127.0.0.1:8080/api/v1/workflow`
+- 页面首页：`http://127.0.0.1:8080/`
+- API 接口：`http://127.0.0.1:8080/api/v1/ops`
+- 工作流接口：`http://127.0.0.1:8080/api/v1/workflow`
 
-If the desktop environment is available, the browser will open automatically after startup.
+如果当前机器支持桌面环境，程序启动后会自动帮你打开浏览器 👀
 
-## 30-Second Check
+---
 
-Check the port:
+## 30 秒自检一下 ⚡
+
+先看看端口是不是起来了：
 
 ```powershell
 Test-NetConnection -ComputerName 127.0.0.1 -Port 8080
 ```
 
-Check backend health:
+再看看健康检查：
 
 ```powershell
 curl http://127.0.0.1:8080/actuator/health
 ```
 
-If the port is open and the health endpoint returns `{"status":"UP"}`, the single-jar app is ready.
+如果你看到了：
 
-## Optional AI Environment Variables
+- `TcpTestSucceeded : True`
+- `{"status":"UP"}`
 
-The application can still start without real AI credentials, but AI-enhanced functions may fall back or be skipped.
+那就说明这一个 Jar 已经完整跑起来啦 🎉
+
+---
+
+## 现在的使用方式是什么？🧭
+
+Argus-Ops 当前推荐流程已经变成：
+
+1. 输入项目目录 📁
+2. 做本地准备与识别 🔎
+3. 探测远端环境 🌍
+4. 预览部署计划 🧾
+5. 直接执行远程部署 🚀
+
+整个过程都在同一个页面里完成，不需要来回切服务。
+
+---
+
+## AI 环境变量是可选的 🤖
+
+如果你只是想先把程序跑起来，不配置真实 AI Key 也能启动。  
+只是部分 AI 增强能力会跳过或降级。
 
 ```powershell
 $env:LOCAL_AI_KEY="your-local-key"
@@ -75,33 +105,36 @@ $env:REMOTE_AI_BASE_URL="https://api.openai.com/v1"
 $env:REMOTE_AI_MODEL="gpt-4o-mini"
 ```
 
-## Rebuild From Source
+---
+
+## 如果你想自己重新打包 🔧
 
 ```powershell
 mvn -DskipTests clean package
 ```
 
-The rebuilt jar will be generated at:
+重新生成的可运行 Jar 在这里：
 
 ```text
 aiops-bootstrap/target/aiops-bootstrap-2.0.0-SNAPSHOT.jar
 ```
 
-## Core Capabilities
+---
 
-- local project preparation and stack detection
-- remote host probing over SSH
-- deployment preview generation
-- remote deployment execution
-- important log extraction and diagnosis
+## 这个项目现在能做什么？🧠
 
-## User Experience Goal
+- 📦 本地项目准备与栈识别
+- 🧪 远端主机探测
+- 📝 部署预览生成
+- 🔐 SSH 远程部署执行
+- 📋 关键日志提取与诊断
+- 🤖 AI 辅助解释复杂部署信息
 
-The intended flow is now:
+---
 
-1. Download one jar
-2. Run one command
-3. Open one page
-4. Complete the whole deployment flow in one workspace
+## 给第一次上手的同学一句话 💬
 
-No extra frontend process is required.
+别先和 Maven、Node、前后端联调流程较劲。  
+
+**先下载 Jar，先跑起来，先打开页面。**  
+只要能看到首页，你就已经跨过了最容易把人劝退的那一步 🙌
