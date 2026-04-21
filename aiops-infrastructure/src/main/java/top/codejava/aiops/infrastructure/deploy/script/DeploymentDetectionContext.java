@@ -1,5 +1,7 @@
 package top.codejava.aiops.infrastructure.deploy.script;
 
+import top.codejava.aiops.infrastructure.projectscan.ProjectScanSnapshot;
+
 import java.nio.file.Path;
 import java.util.Locale;
 
@@ -7,12 +9,12 @@ final class DeploymentDetectionContext {
 
     private final Path projectRoot;
     private final int hostPort;
-    private final ProjectMarkerSnapshot markers;
+    private final ProjectScanSnapshot scanSnapshot;
 
-    DeploymentDetectionContext(Path projectRoot, int hostPort) {
+    DeploymentDetectionContext(Path projectRoot, int hostPort, ProjectScanSnapshot scanSnapshot) {
         this.projectRoot = projectRoot;
         this.hostPort = hostPort;
-        this.markers = ProjectMarkerSnapshot.from(projectRoot);
+        this.scanSnapshot = scanSnapshot;
     }
 
     Path projectRoot() {
@@ -23,8 +25,8 @@ final class DeploymentDetectionContext {
         return hostPort;
     }
 
-    ProjectMarkerSnapshot markers() {
-        return markers;
+    ProjectScanSnapshot scanSnapshot() {
+        return scanSnapshot;
     }
 
     String imageName() {

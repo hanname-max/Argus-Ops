@@ -2,6 +2,8 @@ package top.codejava.aiops.infrastructure.deploy.script;
 
 import org.springframework.stereotype.Component;
 import top.codejava.aiops.application.dto.WorkflowModels;
+import top.codejava.aiops.infrastructure.projectscan.ProjectScanService;
+import top.codejava.aiops.infrastructure.projectscan.ProjectScanSnapshot;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,10 +11,18 @@ import java.nio.file.Path;
 @Component
 public class ProjectDeploymentRuleEngine {
 
+    private final ProjectScanService projectScanService;
+
+    public ProjectDeploymentRuleEngine(ProjectScanService projectScanService) {
+        this.projectScanService = projectScanService;
+    }
+
     public DeploymentPlan resolveForProject(Path projectRoot, Integer requestedPort) {
+        ProjectScanSnapshot scanSnapshot = projectScanService.scan(projectRoot);
         DeploymentDetectionContext context = new DeploymentDetectionContext(
                 projectRoot.toAbsolutePath().normalize(),
-                normalizePort(requestedPort)
+                normalizePort(requestedPort),
+                scanSnapshot
         );
         return resolve(context);
     }
@@ -39,42 +49,42 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private DeploymentPlan resolve(DeploymentDetectionContext context) {
-        ProjectMarkerSnapshot markers = context.markers();
+        ProjectScanSnapshot scanSnapshot = context.scanSnapshot();
 
-        if (markers.hasDockerfile()) {
+        if (scanSnapshot.hasDockerfile()) {
             return customDockerfilePlan(context);
         }
-        if (markers.hasPom()) {
+        if (scanSnapshot.hasPom()) {
             return javaMavenPlan(context);
         }
-        if (markers.hasGradle()) {
+        if (scanSnapshot.hasGradle()) {
             return javaGradlePlan(context);
         }
-        if (markers.hasPackageJson()) {
-            if (markers.nodeLooksNext()) {
+        if (scanSnapshot.hasPackageJson()) {
+            if (scanSnapshot.nodeLooksNext()) {
                 return nextNodePlan(context);
             }
-            if (markers.nodeLooksFrontend()) {
+            if (scanSnapshot.nodeLooksFrontend()) {
                 return nodeFrontendPlan(context);
             }
-            if (markers.nodeLooksRuntime()) {
+            if (scanSnapshot.nodeLooksRuntime()) {
                 return nodeRuntimePlan(context);
             }
         }
-        if (markers.hasManagePy()) {
+        if (scanSnapshot.hasManagePy()) {
             return pythonDjangoPlan(context);
         }
-        if (markers.hasPyproject() || markers.hasRequirementsTxt() || markers.hasAppPy() || markers.hasMainPy()) {
+        if (scanSnapshot.hasPyproject() || scanSnapshot.hasRequirementsTxt() || scanSnapshot.hasAppPy() || scanSnapshot.hasMainPy()) {
             return pythonAppPlan(context);
         }
-        if (markers.hasIndexHtml()) {
+        if (scanSnapshot.hasIndexHtml()) {
             return staticSitePlan(context);
         }
         return unknownPlan(context);
     }
 
     private DeploymentPlan customDockerfilePlan(DeploymentDetectionContext context) {
-        int containerPort = context.markers().customDockerfilePortOrDefault(8080);
+        int containerPort = context.scanSnapshot().customDockerfilePortOrDefault(8080);
         String body = dockerLifecycleBlock(
                 "custom-dockerfile",
                 "",
@@ -147,7 +157,7 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private DeploymentPlan nextNodePlan(DeploymentDetectionContext context) {
-        String installCommand = context.markers().packageInstallCommand();
+        String installCommand = context.scanSnapshot().packageInstallCommand();
         String dockerfile = writeDockerfile(
                 "FROM node:20-alpine AS builder",
                 "WORKDIR /app",
@@ -173,7 +183,7 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private DeploymentPlan nodeFrontendPlan(DeploymentDetectionContext context) {
-        String installCommand = context.markers().packageInstallCommand();
+        String installCommand = context.scanSnapshot().packageInstallCommand();
         String dockerfile = writeDockerfile(
                 "FROM node:20-alpine AS builder",
                 "WORKDIR /app",
@@ -199,8 +209,8 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private DeploymentPlan nodeRuntimePlan(DeploymentDetectionContext context) {
-        String installCommand = context.markers().packageInstallCommand();
-        String startCommand = context.markers().nodeStartCommand();
+        String installCommand = context.scanSnapshot().packageInstallCommand();
+        String startCommand = context.scanSnapshot().nodeStartCommand();
         String dockerfile = writeDockerfile(
                 "FROM node:20-alpine",
                 "WORKDIR /app",
@@ -246,7 +256,7 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private DeploymentPlan pythonAppPlan(DeploymentDetectionContext context) {
-        String startupCommand = context.markers().pythonStartupCommand();
+        String startupCommand = context.scanSnapshot().pythonStartupCommand();
         String dockerfile = writeDockerfile(
                 "FROM python:3.11-slim",
                 "WORKDIR /app",
