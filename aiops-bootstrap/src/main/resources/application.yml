@@ -7,6 +7,8 @@ spring:
       api-key: ${OPENAI_API_KEY:${LOCAL_AI_KEY:6e61acd2-be78-4eea-92a3-237a7b370943}}
 
 aiops:
+  desktop:
+    auto-open-browser: true
   local:
     base-url: ${LOCAL_AI_BASE_URL:https://ark.cn-beijing.volces.com/api/v3/chat/completions}
     api-key: ${LOCAL_AI_KEY:6e61acd2-be78-4eea-92a3-237a7b370943}
