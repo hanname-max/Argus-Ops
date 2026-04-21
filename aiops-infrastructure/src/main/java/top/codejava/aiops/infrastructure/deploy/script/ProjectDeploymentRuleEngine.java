@@ -87,24 +87,22 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private DeploymentPlan javaMavenPlan(DeploymentDetectionContext context) {
-        String dockerfile = """
-                cat > Dockerfile <<'EOF'
-                FROM maven:3.9.9-eclipse-temurin-21 AS builder
-                WORKDIR /workspace
-                COPY . .
-                RUN mvn -DskipTests clean package && \\
-                    JAR_FILE=$(find target -maxdepth 1 -name '*.jar' | head -n 1) && \\
-                    test -n "$JAR_FILE" && \\
-                    cp "$JAR_FILE" /tmp/app.jar
-                
-                FROM eclipse-temurin:21-jre
-                WORKDIR /app
-                COPY --from=builder /tmp/app.jar /app/app.jar
-                ENV APP_PORT=8080
-                EXPOSE 8080
-                ENTRYPOINT ["sh","-c","java -Dserver.port=${APP_PORT:-8080} -jar /app/app.jar"]
-                EOF
-                """;
+        String dockerfile = writeDockerfile(
+                "FROM maven:3.9.9-eclipse-temurin-21 AS builder",
+                "WORKDIR /workspace",
+                "COPY . .",
+                "RUN mvn -DskipTests clean package && \\",
+                "    JAR_FILE=$(find target -maxdepth 1 -name '*.jar' | head -n 1) && \\",
+                "    test -n \"$JAR_FILE\" && \\",
+                "    cp \"$JAR_FILE\" /tmp/app.jar",
+                "",
+                "FROM eclipse-temurin:21-jre",
+                "WORKDIR /app",
+                "COPY --from=builder /tmp/app.jar /app/app.jar",
+                "ENV APP_PORT=8080",
+                "EXPOSE 8080",
+                "ENTRYPOINT [\"sh\",\"-c\",\"java -Dserver.port=${APP_PORT:-8080} -jar /app/app.jar\"]"
+        );
         String body = dockerLifecycleBlock(
                 "java-maven",
                 dockerfile,
@@ -117,28 +115,26 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private DeploymentPlan javaGradlePlan(DeploymentDetectionContext context) {
-        String dockerfile = """
-                cat > Dockerfile <<'EOF'
-                FROM gradle:8.10.2-jdk21 AS builder
-                WORKDIR /workspace
-                COPY . .
-                RUN if [ -x ./gradlew ]; then \\
-                      ./gradlew clean bootJar -x test || ./gradlew clean jar -x test; \\
-                    else \\
-                      gradle clean bootJar -x test || gradle clean jar -x test; \\
-                    fi && \\
-                    JAR_FILE=$(find build/libs -maxdepth 1 -name '*.jar' | head -n 1) && \\
-                    test -n "$JAR_FILE" && \\
-                    cp "$JAR_FILE" /tmp/app.jar
-                
-                FROM eclipse-temurin:21-jre
-                WORKDIR /app
-                COPY --from=builder /tmp/app.jar /app/app.jar
-                ENV APP_PORT=8080
-                EXPOSE 8080
-                ENTRYPOINT ["sh","-c","java -Dserver.port=${APP_PORT:-8080} -jar /app/app.jar"]
-                EOF
-                """;
+        String dockerfile = writeDockerfile(
+                "FROM gradle:8.10.2-jdk21 AS builder",
+                "WORKDIR /workspace",
+                "COPY . .",
+                "RUN if [ -x ./gradlew ]; then \\",
+                "      ./gradlew clean bootJar -x test || ./gradlew clean jar -x test; \\",
+                "    else \\",
+                "      gradle clean bootJar -x test || gradle clean jar -x test; \\",
+                "    fi && \\",
+                "    JAR_FILE=$(find build/libs -maxdepth 1 -name '*.jar' | head -n 1) && \\",
+                "    test -n \"$JAR_FILE\" && \\",
+                "    cp \"$JAR_FILE\" /tmp/app.jar",
+                "",
+                "FROM eclipse-temurin:21-jre",
+                "WORKDIR /app",
+                "COPY --from=builder /tmp/app.jar /app/app.jar",
+                "ENV APP_PORT=8080",
+                "EXPOSE 8080",
+                "ENTRYPOINT [\"sh\",\"-c\",\"java -Dserver.port=${APP_PORT:-8080} -jar /app/app.jar\"]"
+        );
         String body = dockerLifecycleBlock(
                 "java-gradle",
                 dockerfile,
@@ -152,21 +148,19 @@ public class ProjectDeploymentRuleEngine {
 
     private DeploymentPlan nextNodePlan(DeploymentDetectionContext context) {
         String installCommand = context.markers().packageInstallCommand();
-        String dockerfile = """
-                cat > Dockerfile <<'EOF'
-                FROM node:20-alpine AS builder
-                WORKDIR /app
-                COPY . .
-                RUN %s && npm run build
-                
-                FROM node:20-alpine
-                WORKDIR /app
-                COPY --from=builder /app /app
-                ENV PORT=3000
-                EXPOSE 3000
-                CMD ["sh","-c","npm run start"]
-                EOF
-                """.formatted(installCommand);
+        String dockerfile = writeDockerfile(
+                "FROM node:20-alpine AS builder",
+                "WORKDIR /app",
+                "COPY . .",
+                "RUN " + installCommand + " && npm run build",
+                "",
+                "FROM node:20-alpine",
+                "WORKDIR /app",
+                "COPY --from=builder /app /app",
+                "ENV PORT=3000",
+                "EXPOSE 3000",
+                "CMD [\"sh\",\"-c\",\"npm run start\"]"
+        );
         String body = dockerLifecycleBlock(
                 "node-next",
                 dockerfile,
@@ -180,21 +174,19 @@ public class ProjectDeploymentRuleEngine {
 
     private DeploymentPlan nodeFrontendPlan(DeploymentDetectionContext context) {
         String installCommand = context.markers().packageInstallCommand();
-        String dockerfile = """
-                cat > Dockerfile <<'EOF'
-                FROM node:20-alpine AS builder
-                WORKDIR /app
-                COPY . .
-                RUN %s && npm run build && \\
-                    if [ -d dist ]; then cp -r dist /tmp/web; \\
-                    elif [ -d build ]; then cp -r build /tmp/web; \\
-                    else echo "No dist/ or build/ directory generated." >&2; exit 1; fi
-                
-                FROM nginx:1.27-alpine
-                COPY --from=builder /tmp/web /usr/share/nginx/html
-                EXPOSE 80
-                EOF
-                """.formatted(installCommand);
+        String dockerfile = writeDockerfile(
+                "FROM node:20-alpine AS builder",
+                "WORKDIR /app",
+                "COPY . .",
+                "RUN " + installCommand + " && npm run build && \\",
+                "    if [ -d dist ]; then cp -r dist /tmp/web; \\",
+                "    elif [ -d build ]; then cp -r build /tmp/web; \\",
+                "    else echo \"No dist/ or build/ directory generated.\" >&2; exit 1; fi",
+                "",
+                "FROM nginx:1.27-alpine",
+                "COPY --from=builder /tmp/web /usr/share/nginx/html",
+                "EXPOSE 80"
+        );
         String body = dockerLifecycleBlock(
                 "node-frontend-static",
                 dockerfile,
@@ -209,17 +201,15 @@ public class ProjectDeploymentRuleEngine {
     private DeploymentPlan nodeRuntimePlan(DeploymentDetectionContext context) {
         String installCommand = context.markers().packageInstallCommand();
         String startCommand = context.markers().nodeStartCommand();
-        String dockerfile = """
-                cat > Dockerfile <<'EOF'
-                FROM node:20-alpine
-                WORKDIR /app
-                COPY . .
-                RUN %s
-                ENV PORT=8080
-                EXPOSE 8080
-                CMD ["sh","-c","%s"]
-                EOF
-                """.formatted(installCommand, startCommand);
+        String dockerfile = writeDockerfile(
+                "FROM node:20-alpine",
+                "WORKDIR /app",
+                "COPY . .",
+                "RUN " + installCommand,
+                "ENV PORT=8080",
+                "EXPOSE 8080",
+                "CMD [\"sh\",\"-c\"," + shellQuoteForDockerJson(startCommand) + "]"
+        );
         String body = dockerLifecycleBlock(
                 "node-runtime",
                 dockerfile,
@@ -232,20 +222,18 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private DeploymentPlan pythonDjangoPlan(DeploymentDetectionContext context) {
-        String dockerfile = """
-                cat > Dockerfile <<'EOF'
-                FROM python:3.11-slim
-                WORKDIR /app
-                COPY . .
-                RUN pip install --no-cache-dir --upgrade pip && \\
-                    if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; \\
-                    elif [ -f pyproject.toml ]; then pip install --no-cache-dir .; \\
-                    fi
-                ENV APP_PORT=8080
-                EXPOSE 8080
-                CMD ["sh","-c","python manage.py migrate && python manage.py runserver 0.0.0.0:${APP_PORT:-8080}"]
-                EOF
-                """;
+        String dockerfile = writeDockerfile(
+                "FROM python:3.11-slim",
+                "WORKDIR /app",
+                "COPY . .",
+                "RUN pip install --no-cache-dir --upgrade pip && \\",
+                "    if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; \\",
+                "    elif [ -f pyproject.toml ]; then pip install --no-cache-dir .; \\",
+                "    fi",
+                "ENV APP_PORT=8080",
+                "EXPOSE 8080",
+                "CMD [\"sh\",\"-c\",\"python manage.py migrate && python manage.py runserver 0.0.0.0:${APP_PORT:-8080}\"]"
+        );
         String body = dockerLifecycleBlock(
                 "python-django",
                 dockerfile,
@@ -259,20 +247,18 @@ public class ProjectDeploymentRuleEngine {
 
     private DeploymentPlan pythonAppPlan(DeploymentDetectionContext context) {
         String startupCommand = context.markers().pythonStartupCommand();
-        String dockerfile = """
-                cat > Dockerfile <<'EOF'
-                FROM python:3.11-slim
-                WORKDIR /app
-                COPY . .
-                RUN pip install --no-cache-dir --upgrade pip && \\
-                    if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; \\
-                    elif [ -f pyproject.toml ]; then pip install --no-cache-dir .; \\
-                    fi
-                ENV APP_PORT=8080
-                EXPOSE 8080
-                CMD ["sh","-c","%s"]
-                EOF
-                """.formatted(startupCommand);
+        String dockerfile = writeDockerfile(
+                "FROM python:3.11-slim",
+                "WORKDIR /app",
+                "COPY . .",
+                "RUN pip install --no-cache-dir --upgrade pip && \\",
+                "    if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; \\",
+                "    elif [ -f pyproject.toml ]; then pip install --no-cache-dir .; \\",
+                "    fi",
+                "ENV APP_PORT=8080",
+                "EXPOSE 8080",
+                "CMD [\"sh\",\"-c\"," + shellQuoteForDockerJson(startupCommand) + "]"
+        );
         String body = dockerLifecycleBlock(
                 "python-app",
                 dockerfile,
@@ -285,13 +271,11 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private DeploymentPlan staticSitePlan(DeploymentDetectionContext context) {
-        String dockerfile = """
-                cat > Dockerfile <<'EOF'
-                FROM nginx:1.27-alpine
-                COPY . /usr/share/nginx/html
-                EXPOSE 80
-                EOF
-                """;
+        String dockerfile = writeDockerfile(
+                "FROM nginx:1.27-alpine",
+                "COPY . /usr/share/nginx/html",
+                "EXPOSE 80"
+        );
         String body = dockerLifecycleBlock(
                 "nginx-static",
                 dockerfile,
@@ -324,7 +308,7 @@ public class ProjectDeploymentRuleEngine {
                 : environmentArgs.trim() + " ";
         String bootstrap = dockerfileBootstrap == null || dockerfileBootstrap.isBlank()
                 ? ""
-                : dockerfileBootstrap.trim() + System.lineSeparator();
+                : dockerfileBootstrap.trim() + "\n";
 
         return """
                 echo "[AIOPS] strategy=%s"
@@ -353,7 +337,7 @@ public class ProjectDeploymentRuleEngine {
     private String renderShell(String scriptBody, String workingDirectory) {
         String cdBlock = workingDirectory == null || workingDirectory.isBlank()
                 ? ""
-                : "cd " + shellQuote(workingDirectory) + System.lineSeparator();
+                : "cd " + shellQuote(workingDirectory) + "\n";
         return """
                 #!/usr/bin/env bash
                 set -euo pipefail
@@ -391,6 +375,21 @@ public class ProjectDeploymentRuleEngine {
 
     private int normalizePort(Integer port) {
         return port == null || port <= 0 ? 8080 : port;
+    }
+
+    private String writeDockerfile(String... lines) {
+        StringBuilder builder = new StringBuilder(": > Dockerfile");
+        for (String line : lines) {
+            builder.append("\n")
+                    .append("printf '%s\\n' ")
+                    .append(shellQuote(line))
+                    .append(" >> Dockerfile");
+        }
+        return builder.toString();
+    }
+
+    private String shellQuoteForDockerJson(String value) {
+        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     private String shellQuote(String value) {
