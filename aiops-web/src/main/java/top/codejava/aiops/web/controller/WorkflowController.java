@@ -13,13 +13,12 @@ import top.codejava.aiops.application.dto.WorkflowModels;
 import top.codejava.aiops.application.usecase.WorkflowUseCase;
 
 /**
- * Workflow HTTP entrypoint for the deterministic Argus-Ops 2.0 backend.
+ * Workflow HTTP entrypoint for the simplified three-phase Argus-Ops backend.
  *
- * <p>This controller intentionally delegates all state-machine decisions to the application
- * layer. The controller owns transport concerns only: JSON binding, SSE framing, and
- * response typing.
+ * <p>The controller remains transport-only: JSON binding, SSE framing, and response typing.
+ * Business sequencing is owned by the application layer.
  *
- * <p>Workflow state order is fixed:
+ * <p>Workflow phase order is fixed:
  * PREPARE_LOCAL -> PROBE_REMOTE -> DEPLOY_EXECUTION.
  */
 @RestController
@@ -33,16 +32,10 @@ public class WorkflowController {
     }
 
     /**
-     * Step 1: local deep analysis.
+     * Phase 1: local preparation.
      *
-     * <p>Expected behavior:
-     * 1. scan the local project in read-only mode;
-     * 2. infer language, framework, packaging, JDK, and default application port;
-     * 3. persist reusable workflow context for the next stages;
-     * 4. move the state machine to PREPARE_LOCAL/COMPLETED.
-     *
-     * <p>Anti-footgun design:
-     * the application layer must not launch the web process or connect to a real database.
+     * <p>This phase scans the project locally, infers the stack and packaging hints,
+     * and persists the preparation result for later remote probing and deployment planning.
      */
     @PostMapping("/analyze-local")
     public WorkflowModels.AnalyzeLocalResponse analyzeLocal(
@@ -52,16 +45,10 @@ public class WorkflowController {
     }
 
     /**
-     * Step 2: target probing with smart port selection.
+     * Phase 2: remote probing.
      *
-     * <p>Expected behavior:
-     * 1. validate that local analysis has already completed;
-     * 2. probe target host profile and initial port availability;
-     * 3. auto-increment port candidates when the default port is occupied;
-     * 4. return warnings plus the recommended available port.
-     *
-     * <p>Anti-footgun design:
-     * target credentials are accepted for probing only and must never be returned in any response.
+     * <p>This phase validates that local preparation has already completed, probes the
+     * target host profile, and returns a recommended port when conflicts are detected.
      */
     @PostMapping("/probe-target")
     public WorkflowModels.ProbeTargetResponse probeTarget(
@@ -71,14 +58,11 @@ public class WorkflowController {
     }
 
     /**
-     * Step 3: AI-targeted script generation over Server-Sent Events.
+     * Phase 3a: deployment preview over Server-Sent Events.
      *
-     * <p>The application layer is responsible for assembling the immutable prompt context from:
-     * local analysis snapshot, target profile, and confirmed recommended port. This controller
-     * only frames structured workflow events as SSE.
-     *
-     * <p>Spring AI streaming is bridged through {@code ChatClient.prompt().stream().content()} in
-     * the infrastructure adapter, then surfaced here as {@code start/token/complete/error} events.
+     * <p>The application layer assembles the immutable deployment planning context from the
+     * prepared local snapshot and the probed remote profile. This controller only frames the
+     * preview stream as SSE events.
      */
     @GetMapping(path = "/stream-script", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<WorkflowModels.ScriptStreamEvent>> streamScript(
@@ -89,13 +73,10 @@ public class WorkflowController {
     }
 
     /**
-     * Step 4: bilingual structured log diagnosis.
+     * Phase 3b: deployment diagnosis.
      *
-     * <p>Expected behavior:
-     * 1. validate that script generation has already completed;
-     * 2. accept only a persisted log identifier plus a non-zero exit code;
-     * 3. classify the dominant error signature;
-     * 4. return bilingual root cause and fix suggestion fields.
+     * <p>After deployment preview or execution has completed, this endpoint accepts the
+     * log context and returns structured bilingual diagnosis fields.
      */
     @PostMapping("/analyze-log")
     public WorkflowModels.AnalyzeLogResponse analyzeLog(

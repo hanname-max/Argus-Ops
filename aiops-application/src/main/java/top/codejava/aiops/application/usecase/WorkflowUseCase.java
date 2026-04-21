@@ -165,7 +165,7 @@ public class WorkflowUseCase {
                 null,
                 metadata,
                 runningSnapshot,
-                "Script streaming started.",
+                "Deployment preview started.",
                 Instant.now()
         );
 
@@ -204,7 +204,7 @@ public class WorkflowUseCase {
                     null,
                     metadata,
                     snapshot(completed),
-                    "Script streaming completed.",
+                    "Deployment preview completed.",
                     Instant.now()
             ));
         });
