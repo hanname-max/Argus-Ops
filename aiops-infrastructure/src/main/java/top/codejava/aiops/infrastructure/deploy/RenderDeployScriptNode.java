@@ -2,8 +2,8 @@ package top.codejava.aiops.infrastructure.deploy;
 
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import top.codejava.aiops.infrastructure.deploy.script.DeploymentPlan;
-import top.codejava.aiops.infrastructure.deploy.script.ProjectDeploymentRuleEngine;
+import top.codejava.aiops.infrastructure.deploy.script.DeploymentPlanningService;
+import top.codejava.aiops.infrastructure.deploy.script.ResolvedDeploymentPlan;
 
 import java.nio.file.Path;
 
@@ -11,23 +11,26 @@ import java.nio.file.Path;
 @Order(50)
 public class RenderDeployScriptNode implements DeployNode {
 
-    private final ProjectDeploymentRuleEngine projectDeploymentRuleEngine;
+    private final DeploymentPlanningService deploymentPlanningService;
 
-    public RenderDeployScriptNode(ProjectDeploymentRuleEngine projectDeploymentRuleEngine) {
-        this.projectDeploymentRuleEngine = projectDeploymentRuleEngine;
+    public RenderDeployScriptNode(DeploymentPlanningService deploymentPlanningService) {
+        this.deploymentPlanningService = deploymentPlanningService;
     }
 
     @Override
     public void apply(DeployContext context) {
         Path projectRoot = Path.of(context.request().projectPath()).toAbsolutePath().normalize();
-        DeploymentPlan plan = projectDeploymentRuleEngine.resolveForProject(projectRoot, context.request().applicationPort());
-        context.renderedDeployCommand(
-                projectDeploymentRuleEngine.renderExecutionScript(
-                        projectRoot,
-                        context.remoteWorkspacePath(),
-                        context.request().applicationPort()
-                )
+        ResolvedDeploymentPlan resolvedDeploymentPlan = deploymentPlanningService.planForProject(
+                projectRoot,
+                context.request().applicationPort(),
+                context.remoteWorkspacePath()
         );
-        context.progressMessages().add("Resolved deployment strategy: " + plan.strategyKey() + " - " + plan.summary());
+        context.renderedDeployCommand(resolvedDeploymentPlan.executionScript());
+        context.progressMessages().add(
+                "Resolved deployment strategy: "
+                        + resolvedDeploymentPlan.deploymentPlan().strategyKey()
+                        + " - "
+                        + resolvedDeploymentPlan.deploymentPlan().summary()
+        );
     }
 }

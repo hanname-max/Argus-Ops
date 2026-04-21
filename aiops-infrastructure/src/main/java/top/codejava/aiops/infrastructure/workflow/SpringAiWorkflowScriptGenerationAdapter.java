@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import top.codejava.aiops.application.dto.WorkflowModels;
 import top.codejava.aiops.application.port.WorkflowScriptGenerationPort;
-import top.codejava.aiops.infrastructure.deploy.script.ProjectDeploymentRuleEngine;
+import top.codejava.aiops.infrastructure.deploy.script.DeploymentPlanningService;
 
 @Component
 public class SpringAiWorkflowScriptGenerationAdapter implements WorkflowScriptGenerationPort {
@@ -18,21 +18,21 @@ public class SpringAiWorkflowScriptGenerationAdapter implements WorkflowScriptGe
     private final String apiKey;
     @SuppressWarnings("unused")
     private final String model;
-    private final ProjectDeploymentRuleEngine projectDeploymentRuleEngine;
+    private final DeploymentPlanningService deploymentPlanningService;
 
     public SpringAiWorkflowScriptGenerationAdapter(@Qualifier("localChatClient") ChatClient localChatClient,
                                                    @Value("${aiops.local.api-key:}") String apiKey,
                                                    @Value("${aiops.local.model:gpt-4o-mini}") String model,
-                                                   ProjectDeploymentRuleEngine projectDeploymentRuleEngine) {
+                                                   DeploymentPlanningService deploymentPlanningService) {
         this.localChatClient = localChatClient;
         this.apiKey = apiKey;
         this.model = model;
-        this.projectDeploymentRuleEngine = projectDeploymentRuleEngine;
+        this.deploymentPlanningService = deploymentPlanningService;
     }
 
     @Override
     public Flux<String> streamScript(WorkflowModels.ScriptGenerationRequest request) {
-        return chunkText(projectDeploymentRuleEngine.renderPreviewScript(request));
+        return chunkText(deploymentPlanningService.planForWorkflow(request).previewScript());
     }
 
     private Flux<String> chunkText(String text) {
