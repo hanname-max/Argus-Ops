@@ -120,6 +120,7 @@ public class WorkflowUseCase {
                 snapshot(saved),
                 payload.targetProfile(),
                 payload.portProbeDecision(),
+                payload.existingDeployments(),
                 payload.warnings()
         );
     }

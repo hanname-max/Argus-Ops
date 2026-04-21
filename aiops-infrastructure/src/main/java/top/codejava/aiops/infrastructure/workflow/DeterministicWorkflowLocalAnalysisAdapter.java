@@ -47,6 +47,7 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
         String packaging = "generic";
         Integer defaultPort = 8080;
         String jdkVersion = null;
+        WorkflowModels.DeploymentHints deploymentHints = null;
 
         List<WorkflowModels.StackComponent> components = new ArrayList<>();
         List<WorkflowModels.ConfigEvidence> evidences = new ArrayList<>();
@@ -59,6 +60,7 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
             framework = detectJavaFramework(projectPath);
             defaultPort = detectDefaultPort(projectPath, 8080);
             jdkVersion = detectJavaRelease(projectPath);
+            deploymentHints = buildJavaHints(projectPath, buildTool);
             components.add(new WorkflowModels.StackComponent("Spring Boot", framework.startsWith("Spring Boot") ? extractSuffix(framework) : null, "web-framework"));
         } else if (hasPackageJson) {
             language = "JavaScript";
@@ -66,6 +68,22 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
             framework = detectNodeFramework(projectPath);
             packaging = framework.contains("Next") || framework.contains("Service") ? "node-runtime" : "frontend-bundle";
             defaultPort = framework.contains("Next") ? 3000 : 8080;
+            deploymentHints = new WorkflowModels.DeploymentHints(
+                    "NODE",
+                    null,
+                    new WorkflowModels.PackagingPlan(
+                            "NODE_DEFAULT",
+                            !"node-runtime".equals(packaging),
+                            true,
+                            buildTool + " install / " + buildTool + " build",
+                            "dist/build/out or runtime app",
+                            "Node.js projects may require dependency install or a frontend build before deployment."
+                    ),
+                    false,
+                    false,
+                    null,
+                    List.of()
+            );
             components.add(new WorkflowModels.StackComponent(framework, null, "web-framework"));
         } else if (hasPythonProject) {
             language = "Python";
@@ -73,6 +91,22 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
             framework = detectPythonFramework(fileNames);
             packaging = "python-app";
             defaultPort = 8000;
+            deploymentHints = new WorkflowModels.DeploymentHints(
+                    "PYTHON",
+                    null,
+                    new WorkflowModels.PackagingPlan(
+                            "PYTHON_RUNTIME",
+                            false,
+                            true,
+                            "pip install -r requirements.txt",
+                            "python runtime",
+                            "Python services usually need dependency installation before runtime startup."
+                    ),
+                    false,
+                    false,
+                    null,
+                    List.of()
+            );
             components.add(new WorkflowModels.StackComponent(framework, null, "web-framework"));
         } else if (hasGoMod) {
             language = "Go";
@@ -80,6 +114,22 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
             framework = "Go HTTP Service";
             packaging = "go-binary";
             defaultPort = 8080;
+            deploymentHints = new WorkflowModels.DeploymentHints(
+                    "GO",
+                    null,
+                    new WorkflowModels.PackagingPlan(
+                            "GO_BINARY",
+                            true,
+                            true,
+                            "go build",
+                            "compiled binary",
+                            "Go services should build a binary before deployment."
+                    ),
+                    false,
+                    false,
+                    null,
+                    List.of()
+            );
             components.add(new WorkflowModels.StackComponent("Go", null, "runtime"));
         } else if (hasCargo) {
             language = "Rust";
@@ -87,6 +137,22 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
             framework = "Rust Service";
             packaging = "native-binary";
             defaultPort = 8080;
+            deploymentHints = new WorkflowModels.DeploymentHints(
+                    "RUST",
+                    null,
+                    new WorkflowModels.PackagingPlan(
+                            "RUST_BINARY",
+                            true,
+                            true,
+                            "cargo build --release",
+                            "release binary",
+                            "Rust services should build a release binary before deployment."
+                    ),
+                    false,
+                    false,
+                    null,
+                    List.of()
+            );
             components.add(new WorkflowModels.StackComponent("Rust", null, "runtime"));
         } else if (hasIndexHtml) {
             language = "Static";
@@ -94,6 +160,7 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
             framework = "Static Site";
             packaging = "nginx-static";
             defaultPort = 80;
+            deploymentHints = buildNginxHints(projectPath, fileNames);
             components.add(new WorkflowModels.StackComponent("Nginx", "1.27-alpine", "runtime"));
             warnings.add(new WorkflowModels.WorkflowWarning(
                     "STATIC_SITE_NO_BUILD",
@@ -125,10 +192,101 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
                 packaging,
                 jdkVersion,
                 defaultPort,
+                deploymentHints,
                 List.copyOf(components),
                 List.copyOf(evidences)
         );
         return new WorkflowModels.LocalAnalysisPayload(context, List.copyOf(warnings));
+    }
+
+    private WorkflowModels.DeploymentHints buildJavaHints(Path projectPath, String buildTool) {
+        String preferredSubpath = detectPreferredJavaSubpath(projectPath);
+        String artifactPattern = "maven".equalsIgnoreCase(buildTool) ? "**/target/*.jar" : "**/build/libs/*.jar";
+        String buildCommand = "maven".equalsIgnoreCase(buildTool)
+                ? "mvn -DskipTests clean package"
+                : "./gradlew clean build -x test";
+        return new WorkflowModels.DeploymentHints(
+                "JAVA",
+                preferredSubpath,
+                new WorkflowModels.PackagingPlan(
+                        "maven".equalsIgnoreCase(buildTool) ? "JAVA_MAVEN" : "JAVA_GRADLE",
+                        true,
+                        true,
+                        buildCommand,
+                        artifactPattern,
+                        "Java services can usually start on any confirmed port as long as the jar artifact is correct."
+                ),
+                false,
+                false,
+                null,
+                List.of()
+        );
+    }
+
+    private WorkflowModels.DeploymentHints buildNginxHints(Path projectPath, List<String> fileNames) {
+        boolean hasCustomNginxConfig = Files.isRegularFile(projectPath.resolve("nginx.conf"))
+                || Files.isRegularFile(projectPath.resolve("conf/nginx.conf"));
+        boolean looksSpa = fileNames.stream().anyMatch(name -> name.toLowerCase(Locale.ROOT).endsWith(".js"));
+        List<WorkflowModels.ConfigTemplateChoice> configChoices = new ArrayList<>();
+        if (hasCustomNginxConfig) {
+            configChoices.add(new WorkflowModels.ConfigTemplateChoice(
+                    "CUSTOM_NGINX_CONF",
+                    "使用项目自带 nginx.conf",
+                    "部署时复用项目里已有的 nginx.conf，适合已经写好 location / upstream / proxy 的场景。",
+                    true
+            ));
+        }
+        configChoices.add(new WorkflowModels.ConfigTemplateChoice(
+                "GENERATED_STATIC",
+                "生成静态站点配置",
+                "使用默认静态资源配置，适合普通 HTML/CSS/JS 页面。",
+                !hasCustomNginxConfig && !looksSpa
+        ));
+        configChoices.add(new WorkflowModels.ConfigTemplateChoice(
+                "GENERATED_SPA",
+                "生成 SPA 路由配置",
+                "自动加入 try_files 规则，适合 Vue/React 路由前端。",
+                !hasCustomNginxConfig && looksSpa
+        ));
+        return new WorkflowModels.DeploymentHints(
+                "NGINX",
+                detectPreferredStaticSubpath(projectPath),
+                new WorkflowModels.PackagingPlan(
+                        "NGINX_STATIC",
+                        false,
+                        false,
+                        "No build step required unless the frontend assets are generated elsewhere.",
+                        "static assets or html root",
+                        "Nginx deployments should confirm both config mode and the final exposed port."
+                ),
+                true,
+                true,
+                configChoices.stream().filter(WorkflowModels.ConfigTemplateChoice::recommended).findFirst().map(WorkflowModels.ConfigTemplateChoice::id).orElse("GENERATED_STATIC"),
+                List.copyOf(configChoices)
+        );
+    }
+
+    private String detectPreferredJavaSubpath(Path projectPath) {
+        List<String> candidates = List.of("sky-server", "server", "backend", "service", "app", "web");
+        for (String candidate : candidates) {
+            if (Files.isDirectory(projectPath.resolve(candidate))) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private String detectPreferredStaticSubpath(Path projectPath) {
+        if (Files.isRegularFile(projectPath.resolve("html/sky/index.html"))) {
+            return "html/sky";
+        }
+        if (Files.isRegularFile(projectPath.resolve("dist/index.html"))) {
+            return "dist";
+        }
+        if (Files.isRegularFile(projectPath.resolve("build/index.html"))) {
+            return "build";
+        }
+        return null;
     }
 
     private String detectJavaFramework(Path projectPath) {

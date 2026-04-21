@@ -24,6 +24,7 @@ public class SshWorkflowTargetProbeAdapter implements WorkflowTargetProbePort {
         return new WorkflowModels.TargetProbePayload(
                 probeContext.targetProfile(),
                 probeContext.portProbeDecision(),
+                List.copyOf(probeContext.existingDeployments()),
                 List.copyOf(probeContext.warnings())
         );
     }

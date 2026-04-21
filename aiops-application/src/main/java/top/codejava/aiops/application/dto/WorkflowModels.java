@@ -38,6 +38,7 @@ public final class WorkflowModels {
             WorkflowStateSnapshot state,
             TargetSystemProfile targetProfile,
             PortProbeDecision portProbe,
+            List<RemoteServiceHint> existingDeployments,
             List<WorkflowWarning> warnings
     ) {
     }
@@ -105,8 +106,38 @@ public final class WorkflowModels {
             String packaging,
             String detectedJdkVersion,
             Integer defaultApplicationPort,
+            DeploymentHints deploymentHints,
             List<StackComponent> stackComponents,
             List<ConfigEvidence> configEvidences
+    ) {
+    }
+
+    public record DeploymentHints(
+            String deploymentFamily,
+            String preferredDeploySubpath,
+            PackagingPlan packagingPlan,
+            boolean requiresExplicitPortConfirmation,
+            boolean requiresConfigConfirmation,
+            String recommendedConfigChoice,
+            List<ConfigTemplateChoice> configChoices
+    ) {
+    }
+
+    public record PackagingPlan(
+            String strategyKey,
+            boolean requiresPackaging,
+            boolean requiresBuildStep,
+            String buildCommandHint,
+            String artifactPattern,
+            String runtimeHint
+    ) {
+    }
+
+    public record ConfigTemplateChoice(
+            String id,
+            String label,
+            String description,
+            boolean recommended
     ) {
     }
 
@@ -150,6 +181,18 @@ public final class WorkflowModels {
             String dockerVersion,
             boolean canUseDockerDirectly,
             boolean canUseSudo
+    ) {
+    }
+
+    public record RemoteServiceHint(
+            String source,
+            String containerId,
+            String image,
+            String name,
+            String ports,
+            String suspectedType,
+            boolean conflictsWithRequestedPort,
+            String message
     ) {
     }
 
@@ -227,6 +270,7 @@ public final class WorkflowModels {
     public record TargetProbePayload(
             TargetSystemProfile targetProfile,
             PortProbeDecision portProbeDecision,
+            List<RemoteServiceHint> existingDeployments,
             List<WorkflowWarning> warnings
     ) {
     }

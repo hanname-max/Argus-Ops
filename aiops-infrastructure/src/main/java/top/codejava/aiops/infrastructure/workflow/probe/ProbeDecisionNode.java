@@ -12,6 +12,9 @@ public class ProbeDecisionNode implements ProbeNode {
 
     @Override
     public void apply(ProbeContext context) {
+        boolean hasPortConflictContainer = context.existingDeployments().stream()
+                .anyMatch(top.codejava.aiops.application.dto.WorkflowModels.RemoteServiceHint::conflictsWithRequestedPort);
+
         if (context.requestedPortOccupied()
                 && context.recommendedPort() != null
                 && !context.recommendedPort().equals(context.requestedPort())) {
@@ -44,6 +47,22 @@ public class ProbeDecisionNode implements ProbeNode {
                     WorkflowModels.Severity.INFO,
                     "Target profile collected through live SSH probing.",
                     "Continue with the returned host profile and recommended port."
+            ));
+        }
+
+        if (hasPortConflictContainer) {
+            context.warnings().add(new WorkflowModels.WorkflowWarning(
+                    "DOCKER_CONTAINER_USING_TARGET_PORT",
+                    WorkflowModels.Severity.HIGH,
+                    "An existing Docker container is already using the requested deployment port.",
+                    "Review the existing deployment before reusing this port."
+            ));
+        } else if (!context.existingDeployments().isEmpty()) {
+            context.warnings().add(new WorkflowModels.WorkflowWarning(
+                    "DOCKER_CONTAINERS_DETECTED",
+                    WorkflowModels.Severity.INFO,
+                    "Existing Docker containers were detected on the target host.",
+                    "Check whether the current deployment will replace or coexist with those services."
             ));
         }
 

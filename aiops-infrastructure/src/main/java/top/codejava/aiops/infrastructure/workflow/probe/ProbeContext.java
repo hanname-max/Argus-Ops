@@ -18,6 +18,7 @@ public class ProbeContext {
     private final Map<String, String> profileValues = new LinkedHashMap<>();
     private final List<Integer> triedPorts = new ArrayList<>();
     private final List<WorkflowModels.WorkflowWarning> warnings = new ArrayList<>();
+    private final List<WorkflowModels.RemoteServiceHint> existingDeployments = new ArrayList<>();
 
     private boolean requestedPortOccupied;
     private Integer recommendedPort;
@@ -67,6 +68,10 @@ public class ProbeContext {
 
     public List<WorkflowModels.WorkflowWarning> warnings() {
         return warnings;
+    }
+
+    public List<WorkflowModels.RemoteServiceHint> existingDeployments() {
+        return existingDeployments;
     }
 
     public boolean requestedPortOccupied() {
