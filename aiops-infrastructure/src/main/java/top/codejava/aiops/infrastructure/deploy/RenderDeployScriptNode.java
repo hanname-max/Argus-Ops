@@ -25,7 +25,8 @@ public class RenderDeployScriptNode implements DeployNode {
                 projectDeploymentRuleEngine.renderExecutionScript(
                         projectRoot,
                         context.remoteWorkspacePath(),
-                        context.request().applicationPort()
+                        context.request().applicationPort(),
+                        context.request().runtimeEnv()
                 )
         );
         context.progressMessages().add("Resolved deployment strategy: " + plan.strategyKey() + " - " + plan.summary());

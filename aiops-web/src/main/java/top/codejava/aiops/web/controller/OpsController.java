@@ -53,7 +53,8 @@ public class OpsController {
                 request.sudoPassword(),
                 request.applicationPort(),
                 request.workflowId(),
-                request.projectPath()
+                request.projectPath(),
+                request.runtimeEnv()
         ));
     }
 }

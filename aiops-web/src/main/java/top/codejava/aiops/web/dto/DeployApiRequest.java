@@ -1,5 +1,7 @@
 package top.codejava.aiops.web.dto;
 
+import java.util.Map;
+
 public record DeployApiRequest(
         String host,
         int port,
@@ -10,6 +12,7 @@ public record DeployApiRequest(
         String sudoPassword,
         Integer applicationPort,
         String workflowId,
-        String projectPath
+        String projectPath,
+        Map<String, String> runtimeEnv
 ) {
 }

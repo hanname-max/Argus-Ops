@@ -1,5 +1,7 @@
 package top.codejava.aiops.application.dto;
 
+import java.util.Map;
+
 public record RemoteDeployRequest(
         String host,
         int port,
@@ -10,6 +12,7 @@ public record RemoteDeployRequest(
         String sudoPassword,
         Integer applicationPort,
         String workflowId,
-        String projectPath
+        String projectPath,
+        Map<String, String> runtimeEnv
 ) {
 }

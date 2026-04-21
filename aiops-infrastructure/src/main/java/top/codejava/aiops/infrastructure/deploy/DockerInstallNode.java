@@ -67,7 +67,8 @@ public class DockerInstallNode implements DeployNode {
                 context.request().sudoPassword(),
                 context.request().applicationPort(),
                 context.workflowId(),
-                context.request().projectPath()
+                context.request().projectPath(),
+                context.request().runtimeEnv()
         );
     }
 }

@@ -5,6 +5,9 @@ import top.codejava.aiops.application.dto.WorkflowModels;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Component
 public class ProjectDeploymentRuleEngine {
@@ -28,14 +31,17 @@ public class ProjectDeploymentRuleEngine {
         return fallbackForWorkflow(request);
     }
 
-    public String renderExecutionScript(Path projectRoot, String remoteWorkspacePath, Integer requestedPort) {
+    public String renderExecutionScript(Path projectRoot,
+                                        String remoteWorkspacePath,
+                                        Integer requestedPort,
+                                        Map<String, String> runtimeEnv) {
         DeploymentPlan plan = resolveForProject(projectRoot, requestedPort);
-        return renderShell(plan.scriptBody(), remoteWorkspacePath);
+        return renderShell(plan.scriptBody(), remoteWorkspacePath, runtimeEnv);
     }
 
     public String renderPreviewScript(WorkflowModels.ScriptGenerationRequest request) {
         DeploymentPlan plan = resolveForWorkflow(request);
-        return renderShell(plan.scriptBody(), null);
+        return renderShell(plan.scriptBody(), null, previewRuntimeEnv(request));
     }
 
     private DeploymentPlan resolve(DeploymentDetectionContext context) {
@@ -334,15 +340,16 @@ public class ProjectDeploymentRuleEngine {
         ).trim();
     }
 
-    private String renderShell(String scriptBody, String workingDirectory) {
+    private String renderShell(String scriptBody, String workingDirectory, Map<String, String> runtimeEnv) {
         String cdBlock = workingDirectory == null || workingDirectory.isBlank()
                 ? ""
                 : "cd " + shellQuote(workingDirectory) + "\n";
+        String envHints = formatEnvironmentHint(runtimeEnv);
         return """
                 #!/usr/bin/env bash
                 set -euo pipefail
-                %s%s
-                """.formatted(cdBlock, scriptBody.trim()).trim();
+                %s%s%s
+                """.formatted(cdBlock, envHints, scriptBody.trim()).trim();
     }
 
     private Path resolveProjectRoot(WorkflowModels.ScriptGenerationRequest request) {
@@ -386,6 +393,32 @@ public class ProjectDeploymentRuleEngine {
                     .append(" >> Dockerfile");
         }
         return builder.toString();
+    }
+
+    private Map<String, String> previewRuntimeEnv(WorkflowModels.ScriptGenerationRequest request) {
+        if (request == null
+                || request.localContext() == null
+                || request.localContext().configurationInspection() == null
+                || request.localContext().configurationInspection().requiredInputs() == null) {
+            return Map.of();
+        }
+        return request.localContext().configurationInspection().requiredInputs().stream()
+                .collect(Collectors.toMap(
+                        WorkflowModels.RequiredInputPrompt::key,
+                        prompt -> "<provide-at-deploy-time>",
+                        (left, right) -> left
+                ));
+    }
+
+    private String formatEnvironmentHint(Map<String, String> runtimeEnv) {
+        if (runtimeEnv == null || runtimeEnv.isEmpty()) {
+            return "";
+        }
+        List<String> lines = runtimeEnv.entrySet().stream()
+                .filter(entry -> entry.getKey() != null && !entry.getKey().isBlank())
+                .map(entry -> "# ENV " + entry.getKey() + "=" + (entry.getValue() == null || entry.getValue().isBlank() ? "<empty>" : entry.getValue()))
+                .toList();
+        return lines.isEmpty() ? "" : String.join("\n", lines) + "\n";
     }
 
     private String shellQuoteForDockerJson(String value) {
