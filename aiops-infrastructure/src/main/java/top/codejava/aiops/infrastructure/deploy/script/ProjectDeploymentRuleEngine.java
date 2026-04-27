@@ -67,7 +67,7 @@ public class ProjectDeploymentRuleEngine {
     private DeploymentPlan resolve(DeploymentDetectionContext context) {
         ProjectMarkerSnapshot markers = context.markers();
 
-        if (markers.hasDockerfile()) {
+        if (markers.hasDockerfile() && !shouldPreferManagedDockerPlan(context)) {
             return customDockerfilePlan(context);
         }
         if (markers.hasPom()) {
@@ -97,6 +97,14 @@ public class ProjectDeploymentRuleEngine {
             return staticSitePlan(context);
         }
         return unknownPlan(context);
+    }
+
+    private boolean shouldPreferManagedDockerPlan(DeploymentDetectionContext context) {
+        if (context.localContext() == null || context.localContext().packaging() == null) {
+            return false;
+        }
+        String packaging = context.localContext().packaging().trim().toLowerCase(Locale.ROOT);
+        return "jar".equals(packaging) || "nginx-static".equals(packaging);
     }
 
     private DeploymentPlan customDockerfilePlan(DeploymentDetectionContext context) {
