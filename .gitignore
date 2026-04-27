@@ -19,6 +19,7 @@ replay_pid*
 
 # Maven
 target/
+.build/
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
@@ -45,6 +46,5 @@ out/
 .DS_Store
 Thumbs.db
 
-# Committed runtime package for direct download
-!release/
-!release/*.jar
+# Local exported runtime package
+release/

@@ -10,7 +10,7 @@
     <packaging>pom</packaging>
 
     <name>aiops-parent</name>
-    <description>AIOps minimal rebuild with Spring AI only</description>
+    <description>AIOps deterministic deployment workflow</description>
 
     <modules>
         <module>aiops-type</module>
@@ -25,7 +25,6 @@
         <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.3.5</spring-boot.version>
-        <spring-ai.version>1.0.3</spring-ai.version>
         <jsch.version>0.1.55</jsch.version>
     </properties>
 
@@ -35,13 +34,6 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>${spring-boot.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.ai</groupId>
-                <artifactId>spring-ai-bom</artifactId>
-                <version>${spring-ai.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

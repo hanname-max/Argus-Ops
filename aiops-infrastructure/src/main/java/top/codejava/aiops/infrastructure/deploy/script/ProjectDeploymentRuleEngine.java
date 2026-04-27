@@ -16,6 +16,12 @@ import java.util.Map;
 @Component
 public class ProjectDeploymentRuleEngine {
 
+    /**
+     * Resolves one deterministic deployment strategy from project markers plus workflow context.
+     *
+     * <p>The rule order matters: explicit Dockerfiles win first, then language/runtime heuristics,
+     * then static-site nginx handling as the final structured fallback.
+     */
     public DeploymentPlan resolveForProject(Path projectRoot, Integer requestedPort) {
         DeploymentDetectionContext context = new DeploymentDetectionContext(
                 projectRoot.toAbsolutePath().normalize(),
@@ -1000,6 +1006,8 @@ public class ProjectDeploymentRuleEngine {
         String backendReplacement = java.util.regex.Matcher.quoteReplacement("host.docker.internal:${BACKEND_PORT}");
         for (int index = 0; index < lines.size(); index++) {
             String rewritten = lines.get(index);
+            // Custom nginx configs often point to localhost because they were authored on a VM or
+            // bare host. Inside Docker those backends must route through host.docker.internal.
             rewritten = rewritten.replaceAll(
                     "(?i)(proxy_pass\\s+https?://)(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::1]|::1)(?::\\d+)?",
                     "$1" + backendReplacement
@@ -1026,6 +1034,7 @@ public class ProjectDeploymentRuleEngine {
                 continue;
             }
             String configuredRoot = matcher.group(2).trim().replace('\\', '/');
+            // The copied static assets always end up in /usr/share/nginx/html inside the image.
             if ("html".equalsIgnoreCase(configuredRoot)
                     || normalizedStaticRoot.equalsIgnoreCase(configuredRoot)
                     || configuredRoot.endsWith("/" + normalizedStaticRoot)) {

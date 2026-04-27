@@ -71,14 +71,11 @@ public class WorkflowController {
     }
 
     /**
-     * Step 3: AI-targeted script generation over Server-Sent Events.
+     * Step 3: stream the deterministic deployment preview over Server-Sent Events.
      *
-     * <p>The application layer is responsible for assembling the immutable prompt context from:
-     * local analysis snapshot, target profile, and confirmed recommended port. This controller
-     * only frames structured workflow events as SSE.
-     *
-     * <p>Spring AI streaming is bridged through {@code ChatClient.prompt().stream().content()} in
-     * the infrastructure adapter, then surfaced here as {@code start/token/complete/error} events.
+     * <p>The application layer assembles the immutable preview context from local analysis,
+     * target probe output, and the confirmed deployment port. This controller only converts the
+     * resulting chunks into structured SSE frames.
      */
     @GetMapping(path = "/stream-script", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<WorkflowModels.ScriptStreamEvent>> streamScript(

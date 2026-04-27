@@ -18,6 +18,13 @@ import java.util.stream.Stream;
 @Component
 public class ProjectBundleBuilder {
 
+    /**
+     * Builds the upload bundle used by the remote deployment pipeline.
+     *
+     * <p>Most projects are archived as-is after filtering generic build noise. A local nginx
+     * distribution is treated specially: only deployable runtime inputs such as {@code conf/}
+     * and {@code html/} are bundled, while logs, temp files, and local executables are skipped.
+     */
     public Path buildBundle(String projectPath, String workflowId) {
         if (projectPath == null || projectPath.isBlank()) {
             throw new RemoteExecutionException("projectPath is required for project packaging", null);
@@ -86,11 +93,13 @@ public class ProjectBundleBuilder {
         if (relativePath.getNameCount() == 0) {
             return false;
         }
+        // Keep only the parts that are meaningful inside the container image.
         String firstSegment = relativePath.getName(0).toString();
         return "conf".equalsIgnoreCase(firstSegment) || "html".equalsIgnoreCase(firstSegment);
     }
 
     private boolean looksLikeNginxDistribution(Path sourceRoot) {
+        // This pattern matches an extracted nginx runtime directory rather than a source project.
         return Files.isRegularFile(sourceRoot.resolve("conf/nginx.conf"))
                 && Files.isDirectory(sourceRoot.resolve("html"))
                 && Files.isRegularFile(sourceRoot.resolve("nginx.exe"));

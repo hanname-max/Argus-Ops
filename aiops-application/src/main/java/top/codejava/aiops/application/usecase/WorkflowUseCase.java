@@ -15,6 +15,12 @@ import top.codejava.aiops.application.port.WorkflowSessionPort;
 import top.codejava.aiops.application.port.WorkflowTargetProbePort;
 import top.codejava.aiops.type.exception.ValidationException;
 
+/**
+ * Coordinates the four-step deployment workflow and enforces state ordering.
+ *
+ * <p>Each public method both executes one stage and persists the next reusable snapshot so the
+ * following stage can run without re-reading or recomputing previous results.
+ */
 public class WorkflowUseCase {
 
     private static final List<WorkflowModels.WorkflowStage> ORDERED_STAGES = List.of(
@@ -300,6 +306,7 @@ public class WorkflowUseCase {
     }
 
     private WorkflowModels.ScriptGenerationMetadata buildMetadata(WorkflowModels.WorkflowSession session) {
+        // Script rendering needs a stable view of shell, OS, and the final app port after probing.
         Integer recommendedPort = session.portProbeDecision() != null && session.portProbeDecision().recommendedAvailablePort() != null
                 ? session.portProbeDecision().recommendedAvailablePort()
                 : session.localContext() != null ? session.localContext().defaultApplicationPort() : 8080;
@@ -314,8 +321,8 @@ public class WorkflowUseCase {
                 targetOs,
                 recommendedPort,
                 true,
-                "Spring AI",
-                "localChatClient"
+                "Deterministic Rule Engine",
+                "previewRenderer"
         );
     }
 

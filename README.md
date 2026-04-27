@@ -30,7 +30,7 @@ Argus-Ops 现在已经升级成 **单 Jar 启动模式** 啦 ✨
 可直接运行的包就在这里：
 
 ```text
-release/aiops-bootstrap-2.0.0-SNAPSHOT.jar
+aiops-bootstrap/target/aiops-bootstrap-2.0.0-SNAPSHOT.jar
 ```
 
 ### 1. 准备环境
@@ -40,13 +40,13 @@ release/aiops-bootstrap-2.0.0-SNAPSHOT.jar
 ### 2. 一条命令启动
 
 ```powershell
-java -jar .\release\aiops-bootstrap-2.0.0-SNAPSHOT.jar
+java -jar .\aiops-bootstrap\target\aiops-bootstrap-2.0.0-SNAPSHOT.jar
 ```
 
 ### 3. 默认访问地址
 
 - 页面首页：`http://127.0.0.1:8080/`
-- API 接口：`http://127.0.0.1:8080/api/v1/ops`
+- 部署执行接口：`http://127.0.0.1:8080/api/v1/ops/deploy/exec`
 - 工作流接口：`http://127.0.0.1:8080/api/v1/workflow`
 
 如果当前机器支持桌面环境，程序启动后会自动帮你打开浏览器 👀
