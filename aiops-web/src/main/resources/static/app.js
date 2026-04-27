@@ -9,6 +9,7 @@
     stateVersion: null,
     stepStatus: { 1: "idle", 2: "idle", 3: "idle" },
     backendHealth: "checking",
+    analysisDirty: false,
     configDirty: false,
     probeDirty: false,
     localContext: null,
@@ -19,6 +20,7 @@
     dependencyDecisions: [],
     probeWarnings: [],
     needsPortConfirm: false,
+    portResolutionMessage: "",
     scriptRaw: "",
     scriptMeta: null,
     streamStatus: "idle",
@@ -157,7 +159,14 @@
     if (!field) {
       return;
     }
+    const previousValue = state.form[field];
     state.form[field] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+    if (field === "projectPath" && normalizeProjectPath(previousValue) !== normalizeProjectPath(state.form.projectPath)) {
+      resetForProjectPathChange();
+      persist();
+      renderAll();
+      return;
+    }
     if (["targetHost", "sshPort", "username", "password", "connectTimeoutMillis", "applicationPort"].includes(field)) {
       state.probeDirty = true;
     }
@@ -184,14 +193,6 @@
       void scanProject();
     } else if (action === "probe") {
       void probeTarget();
-    } else if (action === "use-port") {
-      if (state.probeDecision?.recommendedAvailablePort) {
-        state.form.applicationPort = state.probeDecision.recommendedAvailablePort;
-        state.needsPortConfirm = false;
-        state.stepStatus[2] = "success";
-        persist();
-        renderAll();
-      }
     } else if (action === "preview") {
       void generatePreview();
     } else if (action === "deploy") {
@@ -359,6 +360,13 @@
           <div class="button-row" style="margin-top: 14px;">
             <button class="btn warn" data-action="use-port">采用推荐端口</button>
           </div>
+        </div>
+      ` : ""}
+
+      ${state.portResolutionMessage ? `
+        <div class="warning-card" style="margin-top: 18px;">
+          <strong>Port Resolution</strong>
+          <p>${escapeHtml(state.portResolutionMessage)}</p>
         </div>
       ` : ""}
 
@@ -660,12 +668,13 @@
   }
 
   async function scanProject() {
+    state.portResolutionMessage = "";
     state.stepStatus[1] = "running";
     renderAll();
     try {
       await syncLocalAnalysis({ force: true, syncPort: true });
       state.stepStatus[1] = "success";
-      state.phase = 1;
+      state.phase = 2;
       renderAll();
     } catch (error) {
       handleTerminalError(1, error.message);
@@ -675,6 +684,7 @@
   async function probeTarget() {
     state.stepStatus[2] = "running";
     state.needsPortConfirm = false;
+    state.portResolutionMessage = "";
     renderAll();
 
     try {
@@ -865,7 +875,7 @@
     if (!state.form.projectPath) {
       throw new Error("projectPath is required");
     }
-    if (!force && state.workflowId && state.localContext && !state.configDirty) {
+    if (!force && state.workflowId && state.localContext && !state.configDirty && !state.analysisDirty) {
       return state.localContext;
     }
 
@@ -886,6 +896,7 @@
     syncWorkflow(result.state);
     state.localContext = result.context || null;
     state.localWarnings = result.warnings || [];
+    state.analysisDirty = false;
     state.configDirty = false;
     state.probeDirty = true;
     state.targetProfile = null;
@@ -893,6 +904,7 @@
     state.dependencyProbeResults = [];
     state.dependencyDecisions = [];
     state.probeWarnings = [];
+    state.portResolutionMessage = "";
     if (syncPort && result.context?.defaultApplicationPort) {
       state.form.applicationPort = result.context.defaultApplicationPort;
     }
@@ -942,18 +954,24 @@
     state.dependencyDecisions = result.dependencyDecisions || collectDependencyDecisions();
     state.probeDirty = false;
 
+    if (result.portProbe?.recommendedAvailablePort) {
+      state.form.applicationPort = result.portProbe.recommendedAvailablePort;
+    }
+
     if (result.portProbe?.requestedPortOccupied
       && result.portProbe?.recommendedAvailablePort
       && result.portProbe.recommendedAvailablePort !== result.portProbe.requestedPort) {
+      state.portResolutionMessage = `Requested port ${result.portProbe.requestedPort} is occupied. Deployment will use ${result.portProbe.recommendedAvailablePort}.`;
+      state.needsPortConfirm = false;
+    } else if (result.portProbe?.requestedPortOccupied && !result.portProbe?.recommendedAvailablePort) {
+      state.portResolutionMessage = "Requested port is occupied and no safe replacement port was found in the probe window.";
       state.needsPortConfirm = true;
     } else {
+      state.portResolutionMessage = "";
       state.needsPortConfirm = false;
-      if (result.portProbe?.recommendedAvailablePort) {
-        state.form.applicationPort = result.portProbe.recommendedAvailablePort;
-      }
     }
 
-    state.stepStatus[2] = state.needsPortConfirm || hasPendingDependencyDecision() ? "warning" : "success";
+    state.stepStatus[2] = hasBlockingProbeIssue() || hasPendingDependencyDecision() || Boolean(state.portResolutionMessage) ? "warning" : "success";
     return state.targetProfile;
   }
 
@@ -1099,9 +1117,24 @@
 
   function canGoTo(phase) {
     if (phase <= state.phase) return true;
-    if (phase === 2) return Boolean(state.localContext);
-    if (phase === 3) return Boolean(state.targetProfile) && !state.needsPortConfirm && !state.probeDirty && !hasPendingDependencyDecision();
+    if (phase === 2) return isLocalAnalysisReady();
+    if (phase === 3) return Boolean(state.targetProfile) && hasResolvedApplicationPort() && !state.probeDirty && !hasPendingDependencyDecision();
     return false;
+  }
+
+  function isLocalAnalysisReady() {
+    return Boolean(state.localContext) && !state.analysisDirty && state.stepStatus[1] !== "running";
+  }
+
+  function hasResolvedApplicationPort() {
+    if (!state.probeDecision) {
+      return false;
+    }
+    return !state.probeDecision.requestedPortOccupied || Boolean(state.probeDecision.recommendedAvailablePort);
+  }
+
+  function hasBlockingProbeIssue() {
+    return Boolean(state.probeDecision?.requestedPortOccupied) && !state.probeDecision?.recommendedAvailablePort;
   }
 
   function findDependencyProbeResult(kind) {
@@ -1210,6 +1243,41 @@
 
   function escapeAttribute(value) {
     return escapeHtml(value).replace(/`/g, "&#96;");
+  }
+
+  function resetForProjectPathChange() {
+    closeStream();
+    state.phase = 1;
+    state.workflowId = "";
+    state.stateVersion = null;
+    state.analysisDirty = true;
+    state.configDirty = false;
+    state.probeDirty = false;
+    state.localContext = null;
+    state.localWarnings = [];
+    state.targetProfile = null;
+    state.probeDecision = null;
+    state.dependencyProbeResults = [];
+    state.dependencyDecisions = [];
+    state.probeWarnings = [];
+    state.needsPortConfirm = false;
+    state.portResolutionMessage = "";
+    state.scriptRaw = "";
+    state.scriptMeta = null;
+    state.streamStatus = "idle";
+    state.streamMessage = "";
+    state.terminalMode = "idle";
+    state.terminalSummary = "";
+    state.terminalLines = [];
+    state.inferredExitCode = 0;
+    state.stepStatus[1] = "idle";
+    state.stepStatus[2] = "idle";
+    state.stepStatus[3] = "idle";
+    state.form.applicationPort = defaultState.form.applicationPort;
+  }
+
+  function normalizeProjectPath(value) {
+    return String(value || "").trim().replace(/\//g, "\\").toLowerCase();
   }
 
   function loadState() {

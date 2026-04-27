@@ -16,6 +16,8 @@ import java.util.Map;
 @Component
 public class ProjectDeploymentRuleEngine {
 
+    private static final String GENERATED_DOCKERFILE = "Dockerfile.aiops";
+
     /**
      * Resolves one deterministic deployment strategy from project markers plus workflow context.
      *
@@ -101,7 +103,7 @@ public class ProjectDeploymentRuleEngine {
         int containerPort = context.markers().customDockerfilePortOrDefault(8080);
         String body = dockerLifecycleBlock(
                 "custom-dockerfile",
-                "",
+                "cp Dockerfile " + GENERATED_DOCKERFILE,
                 context.imageName(),
                 context.hostPort(),
                 containerPort,
@@ -367,7 +369,7 @@ public class ProjectDeploymentRuleEngine {
 
         return """
                 echo "[AIOPS] strategy=%s"
-                %sdocker build -t %s:latest .
+                %sdocker build -f %s -t %s:latest .
                 for container_id in $(docker ps -a --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^%s(-|$)/ {print $1}'); do
                   docker rm -f "$container_id" >/dev/null 2>&1 || true
                 done
@@ -377,6 +379,7 @@ public class ProjectDeploymentRuleEngine {
                 """.formatted(
                 strategyKey,
                 bootstrap,
+                GENERATED_DOCKERFILE,
                 imageName,
                 imageName,
                 containerName,
@@ -405,7 +408,7 @@ public class ProjectDeploymentRuleEngine {
 
         return """
                 echo "[AIOPS] strategy=%s"
-                %sdocker build -t %s:latest .
+                %sdocker build -f %s -t %s:latest .
                 for container_id in $(docker ps -a --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^%s(-|$)/ {print $1}'); do
                   docker rm -f "$container_id" >/dev/null 2>&1 || true
                 done
@@ -424,6 +427,7 @@ public class ProjectDeploymentRuleEngine {
                 """.formatted(
                 strategyKey,
                 bootstrap,
+                GENERATED_DOCKERFILE,
                 imageName,
                 imageName,
                 containerName,
@@ -453,7 +457,7 @@ public class ProjectDeploymentRuleEngine {
 
         return """
                 echo "[AIOPS] strategy=%s"
-                %sdocker build -t %s:latest .
+                %sdocker build -f %s -t %s:latest .
                 for container_id in $(docker ps -a --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^%s(-|$)/ {print $1}'); do
                   docker rm -f "$container_id" >/dev/null 2>&1 || true
                 done
@@ -480,6 +484,7 @@ public class ProjectDeploymentRuleEngine {
                 """.formatted(
                 strategyKey,
                 bootstrap,
+                GENERATED_DOCKERFILE,
                 imageName,
                 imageName,
                 containerName,
@@ -994,6 +999,7 @@ public class ProjectDeploymentRuleEngine {
         }
 
         rewriteLocalNginxBackends(lines);
+        rewriteNginxListen(lines);
         rewriteNginxRoots(lines, staticRoot);
         return String.join("\n", lines);
     }
@@ -1042,6 +1048,27 @@ public class ProjectDeploymentRuleEngine {
                         + java.util.regex.Matcher.quoteReplacement("/usr/share/nginx/html")
                         + matcher.group(3));
             }
+        }
+    }
+
+    private void rewriteNginxListen(List<String> lines) {
+        for (int index = 0; index < lines.size(); index++) {
+            String line = lines.get(index);
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("^(\\s*listen\\s+)([^;]+)(\\s*;.*)$", java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .matcher(line);
+            if (!matcher.matches()) {
+                continue;
+            }
+            String value = matcher.group(2).trim();
+            if (value.isBlank()) {
+                continue;
+            }
+            String[] segments = value.split("\\s+", 2);
+            String rewrittenValue = segments.length > 1 ? "80 " + segments[1] : "80";
+            lines.set(index, matcher.group(1)
+                    + java.util.regex.Matcher.quoteReplacement(rewrittenValue)
+                    + matcher.group(3));
         }
     }
 
@@ -1124,12 +1151,13 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private String writeDockerfile(String... lines) {
-        StringBuilder builder = new StringBuilder(": > Dockerfile");
+        StringBuilder builder = new StringBuilder(": > " + GENERATED_DOCKERFILE);
         for (String line : lines) {
             builder.append("\n")
                     .append("printf '%s\\n' ")
                     .append(shellQuote(line))
-                    .append(" >> Dockerfile");
+                    .append(" >> ")
+                    .append(GENERATED_DOCKERFILE);
         }
         return builder.toString();
     }
