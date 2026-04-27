@@ -932,7 +932,7 @@ public class ProjectDeploymentRuleEngine {
     private List<String> buildCustomNginxDockerfileLines(DeploymentDetectionContext context,
                                                          String staticRoot,
                                                          String nginxConfigSource) {
-        String renderedConfig = renderResolvedNginxConfig(context, nginxConfigSource);
+        String renderedConfig = renderResolvedNginxConfig(context, staticRoot, nginxConfigSource);
         List<String> lines = new ArrayList<>();
         lines.add("FROM nginx:1.27-alpine");
         lines.add("ENV BACKEND_PORT=8080");
@@ -945,7 +945,9 @@ public class ProjectDeploymentRuleEngine {
         return lines;
     }
 
-    private String renderResolvedNginxConfig(DeploymentDetectionContext context, String nginxConfigSource) {
+    private String renderResolvedNginxConfig(DeploymentDetectionContext context,
+                                             String staticRoot,
+                                             String nginxConfigSource) {
         Path configPath = context.projectRoot().resolve(nginxConfigSource).normalize();
         List<String> lines;
         try {
@@ -986,6 +988,7 @@ public class ProjectDeploymentRuleEngine {
         }
 
         rewriteLocalNginxBackends(lines);
+        rewriteNginxRoots(lines, staticRoot);
         return String.join("\n", lines);
     }
 
@@ -994,17 +997,42 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private void rewriteLocalNginxBackends(List<String> lines) {
+        String backendReplacement = java.util.regex.Matcher.quoteReplacement("host.docker.internal:${BACKEND_PORT}");
         for (int index = 0; index < lines.size(); index++) {
             String rewritten = lines.get(index);
             rewritten = rewritten.replaceAll(
                     "(?i)(proxy_pass\\s+https?://)(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::1]|::1)(?::\\d+)?",
-                    "$1host.docker.internal:${BACKEND_PORT}"
+                    "$1" + backendReplacement
             );
             rewritten = rewritten.replaceAll(
                     "(?i)(server\\s+)(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::1]|::1)(?::\\d+)?",
-                    "$1host.docker.internal:${BACKEND_PORT}"
+                    "$1" + backendReplacement
             );
             lines.set(index, rewritten);
+        }
+    }
+
+    private void rewriteNginxRoots(List<String> lines, String staticRoot) {
+        if (staticRoot == null || staticRoot.isBlank()) {
+            return;
+        }
+        String normalizedStaticRoot = staticRoot.replace('\\', '/').replaceAll("/+$", "");
+        for (int index = 0; index < lines.size(); index++) {
+            String line = lines.get(index);
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("^(\\s*root\\s+)([^;]+)(\\s*;.*)$", java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .matcher(line);
+            if (!matcher.matches()) {
+                continue;
+            }
+            String configuredRoot = matcher.group(2).trim().replace('\\', '/');
+            if ("html".equalsIgnoreCase(configuredRoot)
+                    || normalizedStaticRoot.equalsIgnoreCase(configuredRoot)
+                    || configuredRoot.endsWith("/" + normalizedStaticRoot)) {
+                lines.set(index, matcher.group(1)
+                        + java.util.regex.Matcher.quoteReplacement("/usr/share/nginx/html")
+                        + matcher.group(3));
+            }
         }
     }
 

@@ -28,6 +28,8 @@ public class ProjectBundleBuilder {
             throw new RemoteExecutionException("projectPath must be an existing directory: " + sourceRoot, null);
         }
 
+        boolean nginxDistribution = looksLikeNginxDistribution(sourceRoot);
+
         try {
             Path tempDirectory = Files.createTempDirectory("argus-bundle-" + workflowId + "-");
             Path bundlePath = tempDirectory.resolve("bundle.tar.gz");
@@ -38,7 +40,7 @@ public class ProjectBundleBuilder {
                 try (Stream<Path> paths = Files.walk(sourceRoot)) {
                     List<Path> sourceFiles = paths
                             .filter(path -> !path.equals(sourceRoot))
-                            .filter(this::shouldInclude)
+                            .filter(path -> shouldInclude(sourceRoot, path, nginxDistribution))
                             .sorted(Comparator.naturalOrder())
                             .toList();
                     for (Path path : sourceFiles) {
@@ -62,13 +64,35 @@ public class ProjectBundleBuilder {
         tarStream.closeArchiveEntry();
     }
 
-    private boolean shouldInclude(Path path) {
-        for (Path segment : path) {
+    private boolean shouldInclude(Path sourceRoot, Path path, boolean nginxDistribution) {
+        Path relativePath = sourceRoot.relativize(path);
+        if (nginxDistribution) {
+            return shouldIncludeNginxDistribution(relativePath);
+        }
+        return shouldIncludeGeneric(relativePath);
+    }
+
+    private boolean shouldIncludeGeneric(Path relativePath) {
+        for (Path segment : relativePath) {
             String name = segment.toString();
             if (".git".equalsIgnoreCase(name) || ".idea".equalsIgnoreCase(name) || "target".equalsIgnoreCase(name)) {
                 return false;
             }
         }
         return true;
+    }
+
+    private boolean shouldIncludeNginxDistribution(Path relativePath) {
+        if (relativePath.getNameCount() == 0) {
+            return false;
+        }
+        String firstSegment = relativePath.getName(0).toString();
+        return "conf".equalsIgnoreCase(firstSegment) || "html".equalsIgnoreCase(firstSegment);
+    }
+
+    private boolean looksLikeNginxDistribution(Path sourceRoot) {
+        return Files.isRegularFile(sourceRoot.resolve("conf/nginx.conf"))
+                && Files.isDirectory(sourceRoot.resolve("html"))
+                && Files.isRegularFile(sourceRoot.resolve("nginx.exe"));
     }
 }
