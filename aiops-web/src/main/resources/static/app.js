@@ -9,10 +9,14 @@
     stateVersion: null,
     stepStatus: { 1: "idle", 2: "idle", 3: "idle" },
     backendHealth: "checking",
+    configDirty: false,
+    probeDirty: false,
     localContext: null,
     localWarnings: [],
     targetProfile: null,
     probeDecision: null,
+    dependencyProbeResults: [],
+    dependencyDecisions: [],
     probeWarnings: [],
     needsPortConfirm: false,
     scriptRaw: "",
@@ -129,11 +133,34 @@
   }
 
   function handleInput(event) {
+    const configId = event.target.getAttribute("data-config-id");
+    if (configId) {
+      updateRuntimeConfigItem(configId, event.target.value);
+      return;
+    }
+
+    const configChoice = event.target.getAttribute("data-config-choice");
+    if (configChoice && state.localContext) {
+      state.localContext.confirmedConfigChoice = event.target.value;
+      state.configDirty = true;
+      persist();
+      return;
+    }
+
+    const dependencyKind = event.target.getAttribute("data-dependency-kind");
+    if (dependencyKind) {
+      updateDependencyDecision(dependencyKind, event.target.value);
+      return;
+    }
+
     const field = event.target.getAttribute("data-field");
     if (!field) {
       return;
     }
     state.form[field] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+    if (["targetHost", "sshPort", "username", "password", "connectTimeoutMillis", "applicationPort"].includes(field)) {
+      state.probeDirty = true;
+    }
     persist();
   }
 
@@ -265,6 +292,9 @@
             </div>
           </div>
         ` : ""}
+
+        ${renderConfigChoiceSection()}
+        ${renderRuntimeConfigSection()}
       ` : ""}
 
       ${(state.localWarnings || []).length ? `
@@ -360,6 +390,8 @@
           </div>
         </div>
       ` : ""}
+
+      ${renderDependencyProbeSection()}
 
       ${(state.probeWarnings || []).length ? `
         <div class="warning-list" style="margin-top: 18px;">
@@ -495,29 +527,145 @@
     });
   }
 
+  function renderDependencyProbeSection() {
+    const requirements = state.localContext?.dependencyRequirements || [];
+    if (!requirements.length) {
+      return "";
+    }
+
+    return `
+      <div class="config-section" style="margin-top: 18px;">
+        <div class="section-subhead">
+          <div>
+            <h4>依赖探测与确认</h4>
+            <p>基于本地配置推导 MySQL / Redis 依赖，并通过 SSH 探测目标环境是否已存在、是否需要自动部署。</p>
+          </div>
+          <span class="pill"><strong>${requirements.length}</strong> 项</span>
+        </div>
+        <div class="config-list">
+          ${requirements.map((requirement) => {
+            const result = findDependencyProbeResult(requirement.kind);
+            const decision = findDependencyDecision(requirement.kind);
+            return `
+              <div class="config-card ${(result?.requiresDecision || false) ? "needs-confirm" : ""}">
+                <div class="config-card-head">
+                  <div>
+                    <strong>${escapeHtml(requirement.displayName || requirement.kind)}</strong>
+                    <code>${escapeHtml(requirement.kind)}</code>
+                  </div>
+                  <div class="config-tags">
+                    <span class="pill"><strong>${escapeHtml(formatDependencyStatus(result))}</strong></span>
+                    ${requirement.required ? `<span class="pill warn-pill"><strong>必需</strong></span>` : ""}
+                  </div>
+                </div>
+                <div class="config-source">来源：${escapeHtml(formatDependencySource(requirement))}</div>
+                <p class="config-hint">期望地址：${escapeHtml(requirement.host || "unknown")}:${escapeHtml(String(requirement.port || ""))}${requirement.databaseName ? ` / ${escapeHtml(requirement.databaseName)}` : ""}</p>
+                ${result ? `<p class="config-hint">探测结果：${escapeHtml(result.message || "Dependency probe completed.")}</p>` : `<p class="config-hint">尚未开始远端依赖探测。</p>`}
+                ${(result?.requiresDecision || false) ? `
+                  <p class="config-hint">${escapeHtml(formatDependencyDecisionPrompt(requirement, result))}</p>
+                  <div class="config-input-row">
+                    <label class="sr-only" for="dependency-${escapeAttribute(requirement.kind)}">依赖处理方式</label>
+                    <select
+                      id="dependency-${escapeAttribute(requirement.kind)}"
+                      class="config-input"
+                      data-dependency-kind="${escapeAttribute(requirement.kind)}">
+                      ${renderDependencyDecisionOptions(requirement, result, decision)}
+                    </select>
+                  </div>
+                ` : ""}
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderConfigChoiceSection() {
+    const choices = state.localContext?.deploymentHints?.configChoices || [];
+    if (!choices.length) {
+      return "";
+    }
+    const selected = state.localContext?.confirmedConfigChoice
+      || state.localContext?.deploymentHints?.recommendedConfigChoice
+      || choices[0]?.id;
+
+    return `
+      <div class="config-section" style="margin-top: 18px;">
+        <div class="section-subhead">
+          <div>
+            <h4>配置模式确认</h4>
+            <p>保持现有流程，只在当前步骤确认使用项目自带配置还是生成默认配置。</p>
+          </div>
+        </div>
+        <div class="config-choice-list">
+          ${choices.map((choice) => `
+            <label class="config-choice ${selected === choice.id ? "selected" : ""}">
+              <input type="radio" name="configChoice" data-config-choice="true" value="${escapeAttribute(choice.id)}" ${selected === choice.id ? "checked" : ""}>
+              <div>
+                <strong>${escapeHtml(choice.label)}</strong>
+                <p>${escapeHtml(choice.description)}</p>
+              </div>
+            </label>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderRuntimeConfigSection() {
+    const items = state.localContext?.runtimeConfigItems || [];
+    if (!items.length) {
+      return "";
+    }
+
+    return `
+      <div class="config-section" style="margin-top: 18px;">
+        <div class="section-subhead">
+          <div>
+            <h4>运行配置确认</h4>
+            <p>优先显示 Java / Nginx 部署关键配置，并明确标注来源模块、文件与 profile。</p>
+          </div>
+          <span class="pill"><strong>${items.length}</strong> 项</span>
+        </div>
+        <div class="config-list">
+          ${items.map((item) => `
+            <div class="config-card ${item.requiresConfirm ? "needs-confirm" : ""}">
+              <div class="config-card-head">
+                <div>
+                  <strong>${escapeHtml(item.label || item.key)}</strong>
+                  <code>${escapeHtml(item.key)}</code>
+                </div>
+                <div class="config-tags">
+                  <span class="pill"><strong>${escapeHtml(item.family || "CONFIG")}</strong></span>
+                  ${item.placeholder ? `<span class="pill warn-pill"><strong>占位符</strong></span>` : ""}
+                  ${item.sensitive ? `<span class="pill warn-pill"><strong>敏感</strong></span>` : ""}
+                </div>
+              </div>
+              <div class="config-source">来源：${escapeHtml(formatConfigSource(item))}</div>
+              <div class="config-input-row">
+                <input
+                  class="config-input"
+                  data-config-id="${escapeAttribute(item.id)}"
+                  type="${resolveConfigInputType(item)}"
+                  value="${escapeAttribute(item.valuePreview || "")}"
+                  placeholder="确认或修改该配置值">
+              </div>
+              <p class="config-hint">${escapeHtml(item.operatorHint || "部署前确认该配置是否需要覆盖。")}</p>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
   async function scanProject() {
     state.stepStatus[1] = "running";
     renderAll();
     try {
-      const result = await requestJson("/v1/workflow/analyze-local", {
-        method: "POST",
-        body: JSON.stringify({
-          workflowId: state.workflowId || null,
-          expectedStateVersion: state.stateVersion,
-          projectPath: state.form.projectPath,
-          operator: "Argus-Ops",
-          includeDependencyGraph: true,
-          simulateCompile: true
-        })
-      });
-      syncWorkflow(result.state);
-      state.localContext = result.context || null;
-      state.localWarnings = result.warnings || [];
+      await syncLocalAnalysis({ force: true, syncPort: true });
       state.stepStatus[1] = "success";
       state.phase = 1;
-      if (result.context?.defaultApplicationPort) {
-        state.form.applicationPort = result.context.defaultApplicationPort;
-      }
       renderAll();
     } catch (error) {
       handleTerminalError(1, error.message);
@@ -525,48 +673,12 @@
   }
 
   async function probeTarget() {
-    if (!state.workflowId) {
-      return;
-    }
     state.stepStatus[2] = "running";
     state.needsPortConfirm = false;
     renderAll();
 
     try {
-      const result = await requestJson("/v1/workflow/probe-target", {
-        method: "POST",
-        body: JSON.stringify({
-          workflowId: state.workflowId,
-          expectedStateVersion: state.stateVersion,
-          credential: {
-            host: state.form.targetHost,
-            sshPort: Number(state.form.sshPort),
-            username: state.form.username,
-            credentialType: "PASSWORD",
-            password: state.form.password,
-            privateKeyPem: "",
-            connectTimeoutMillis: Number(state.form.connectTimeoutMillis)
-          },
-          defaultApplicationPort: Number(state.form.applicationPort),
-          maxAutoIncrementProbeSpan: 10
-        })
-      });
-
-      syncWorkflow(result.state);
-      state.targetProfile = result.targetProfile || null;
-      state.probeDecision = result.portProbe || null;
-      state.probeWarnings = result.warnings || [];
-      if (result.portProbe?.requestedPortOccupied
-        && result.portProbe?.recommendedAvailablePort
-        && result.portProbe.recommendedAvailablePort !== result.portProbe.requestedPort) {
-        state.needsPortConfirm = true;
-        state.stepStatus[2] = "warning";
-      } else {
-        if (result.portProbe?.recommendedAvailablePort) {
-          state.form.applicationPort = result.portProbe.recommendedAvailablePort;
-        }
-        state.stepStatus[2] = "success";
-      }
+      await syncProbeTarget({ force: true });
       renderAll();
     } catch (error) {
       handleTerminalError(2, error.message);
@@ -575,6 +687,13 @@
 
   async function generatePreview() {
     if (!canGoTo(3)) {
+      return;
+    }
+    try {
+      await syncLocalAnalysis({ force: false, syncPort: false });
+      await syncProbeTarget({ force: false });
+    } catch (error) {
+      handleTerminalError(error.step || 2, error.message);
       return;
     }
     closeStream();
@@ -742,6 +861,102 @@
     return payload;
   }
 
+  async function syncLocalAnalysis({ force, syncPort }) {
+    if (!state.form.projectPath) {
+      throw new Error("projectPath is required");
+    }
+    if (!force && state.workflowId && state.localContext && !state.configDirty) {
+      return state.localContext;
+    }
+
+    const result = await requestJson("/v1/workflow/analyze-local", {
+      method: "POST",
+      body: JSON.stringify({
+        workflowId: state.workflowId || null,
+        expectedStateVersion: state.stateVersion,
+        projectPath: state.form.projectPath,
+        operator: "Argus-Ops",
+        includeDependencyGraph: true,
+        simulateCompile: true,
+        confirmedConfigChoice: state.localContext?.confirmedConfigChoice || null,
+        configOverrides: collectConfigOverrides()
+      })
+    });
+
+    syncWorkflow(result.state);
+    state.localContext = result.context || null;
+    state.localWarnings = result.warnings || [];
+    state.configDirty = false;
+    state.probeDirty = true;
+    state.targetProfile = null;
+    state.probeDecision = null;
+    state.dependencyProbeResults = [];
+    state.dependencyDecisions = [];
+    state.probeWarnings = [];
+    if (syncPort && result.context?.defaultApplicationPort) {
+      state.form.applicationPort = result.context.defaultApplicationPort;
+    }
+    return result.context;
+  }
+
+  async function syncProbeTarget({ force }) {
+    try {
+      await syncLocalAnalysis({ force: false, syncPort: true });
+    } catch (error) {
+      error.step = 1;
+      throw error;
+    }
+
+    if (!state.workflowId) {
+      throw Object.assign(new Error("workflowId is required"), { step: 2 });
+    }
+    if (!force && state.targetProfile && !state.probeDirty) {
+      return state.targetProfile;
+    }
+
+    const result = await requestJson("/v1/workflow/probe-target", {
+      method: "POST",
+      body: JSON.stringify({
+        workflowId: state.workflowId,
+        expectedStateVersion: state.stateVersion,
+        credential: {
+          host: state.form.targetHost,
+          sshPort: Number(state.form.sshPort),
+          username: state.form.username,
+          credentialType: "PASSWORD",
+          password: state.form.password,
+          privateKeyPem: "",
+          connectTimeoutMillis: Number(state.form.connectTimeoutMillis)
+        },
+        defaultApplicationPort: Number(state.form.applicationPort),
+        maxAutoIncrementProbeSpan: 10,
+        dependencyDecisions: collectDependencyDecisions()
+      })
+    });
+
+    syncWorkflow(result.state);
+    state.targetProfile = result.targetProfile || null;
+    state.probeDecision = result.portProbe || null;
+    state.probeWarnings = result.warnings || [];
+    state.dependencyProbeResults = result.dependencyProbeResults || [];
+    state.dependencyDecisions = result.dependencyDecisions || collectDependencyDecisions();
+    state.probeDirty = false;
+
+    if (result.portProbe?.requestedPortOccupied
+      && result.portProbe?.recommendedAvailablePort
+      && result.portProbe.recommendedAvailablePort !== result.portProbe.requestedPort) {
+      state.needsPortConfirm = true;
+    } else {
+      state.needsPortConfirm = false;
+      if (result.portProbe?.recommendedAvailablePort) {
+        state.form.applicationPort = result.portProbe.recommendedAvailablePort;
+      }
+    }
+
+    state.stepStatus[2] = state.needsPortConfirm || hasPendingDependencyDecision() ? "warning" : "success";
+    return state.targetProfile;
+  }
+
   function checkHealth() {
     fetch("/actuator/health")
       .then((response) => response.json())
@@ -824,11 +1039,150 @@
     state.stateVersion = snapshot.stateVersion ?? state.stateVersion;
   }
 
+  function updateRuntimeConfigItem(configId, value) {
+    const items = state.localContext?.runtimeConfigItems;
+    if (!items?.length) {
+      return;
+    }
+    const item = items.find((entry) => entry.id === configId);
+    if (!item) {
+      return;
+    }
+    item.valuePreview = value;
+    state.configDirty = true;
+    persist();
+  }
+
+  function collectConfigOverrides() {
+    return (state.localContext?.runtimeConfigItems || []).map((item) => ({
+      id: item.id,
+      value: item.valuePreview ?? ""
+    }));
+  }
+
+  function collectDependencyDecisions() {
+    return (state.dependencyDecisions || [])
+      .filter((item) => item?.kind && item?.mode)
+      .map((item) => ({
+        kind: item.kind,
+        mode: item.mode,
+        note: item.note || null
+      }));
+  }
+
+  function formatConfigSource(item) {
+    const parts = [];
+    if (item.sourceModule) {
+      parts.push(item.sourceModule === "." ? "root" : item.sourceModule);
+    }
+    if (item.sourceFile) {
+      parts.push(item.sourceFile);
+    }
+    if (item.sourceProfile) {
+      parts.push(`profile=${item.sourceProfile}`);
+    }
+    if (item.sourceLine) {
+      parts.push(`line=${item.sourceLine}`);
+    }
+    return parts.join(" / ") || "unknown";
+  }
+
+  function resolveConfigInputType(item) {
+    if (item?.sensitive) {
+      return "password";
+    }
+    if (/(^|[._\]])port$/i.test(item?.key || "") || /\.listen$/i.test(item?.key || "")) {
+      return "number";
+    }
+    return "text";
+  }
+
   function canGoTo(phase) {
     if (phase <= state.phase) return true;
     if (phase === 2) return Boolean(state.localContext);
-    if (phase === 3) return Boolean(state.targetProfile) && !state.needsPortConfirm;
+    if (phase === 3) return Boolean(state.targetProfile) && !state.needsPortConfirm && !state.probeDirty && !hasPendingDependencyDecision();
     return false;
+  }
+
+  function findDependencyProbeResult(kind) {
+    return (state.dependencyProbeResults || []).find((item) => item?.kind === kind) || null;
+  }
+
+  function findDependencyDecision(kind) {
+    return (state.dependencyDecisions || []).find((item) => item?.kind === kind) || null;
+  }
+
+  function updateDependencyDecision(kind, mode) {
+    const decisions = state.dependencyDecisions || [];
+    const existing = decisions.find((item) => item.kind === kind);
+    if (existing) {
+      existing.mode = mode;
+    } else {
+      decisions.push({ kind, mode, note: null });
+    }
+    state.dependencyDecisions = decisions.filter((item) => item.mode);
+    state.probeDirty = true;
+    persist();
+  }
+
+  function hasPendingDependencyDecision() {
+    return (state.dependencyProbeResults || []).some((item) => item?.requiresDecision && !findDependencyDecision(item.kind));
+  }
+
+  function formatDependencyStatus(result) {
+    if (!result) return "Not Probed";
+    return result.status || "UNKNOWN";
+  }
+
+  function formatDependencySource(requirement) {
+    const parts = [];
+    if (requirement?.sourceModule) {
+      parts.push(requirement.sourceModule === "." ? "root" : requirement.sourceModule);
+    }
+    if (requirement?.sourceFile) {
+      parts.push(requirement.sourceFile);
+    }
+    if (requirement?.sourceProfile) {
+      parts.push(`profile=${requirement.sourceProfile}`);
+    }
+    return parts.join(" / ") || "unknown";
+  }
+
+  function formatDependencyDecisionPrompt(requirement, result) {
+    if (!result?.requiresDecision) {
+      return "Dependency is ready. You can continue to script generation.";
+    }
+    const label = requirement?.displayName || requirement?.kind || "Dependency";
+    if (isLocalDependencyHost(requirement?.host)) {
+      return `${label} is not confirmed as available. Choose whether to create a minimal local instance on the target host so the jar can start.`;
+    }
+    return `${label} is not reachable at the configured address. Choose whether to create a minimal local instance on the target host and temporarily route the jar to it.`;
+  }
+
+  function renderDependencyDecisionOptions(requirement, result, decision) {
+    const selected = decision?.mode || "";
+    const options = [
+      { value: "", label: "请选择处理方式" },
+      { value: "DEPLOY_AUTOMATICALLY", label: result?.status === "NOT_FOUND" ? "自动部署 (Recommended)" : "自动部署" },
+      { value: "MANUAL_PREPARE", label: "手工准备" },
+      { value: "CONTINUE_ANYWAY", label: "继续执行" },
+      { value: "REUSE_EXISTING", label: "复用现有" }
+    ];
+    if (options.length === 5) {
+      options[0].label = "Choose an action";
+      options[1].label = "Create on target host (Recommended)";
+      options[2].label = "Prepare it myself";
+      options[3].label = "Continue with risk";
+      options[4].label = "Reuse existing instance";
+    }
+    return options.map((option) => `
+      <option value="${escapeAttribute(option.value)}" ${selected === option.value ? "selected" : ""}>${escapeHtml(option.label)}</option>
+    `).join("");
+  }
+
+  function isLocalDependencyHost(host) {
+    const normalized = String(host || "").trim().toLowerCase();
+    return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
   }
 
   function closeStream() {
@@ -852,6 +1206,10 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function escapeAttribute(value) {
+    return escapeHtml(value).replace(/`/g, "&#96;");
   }
 
   function loadState() {

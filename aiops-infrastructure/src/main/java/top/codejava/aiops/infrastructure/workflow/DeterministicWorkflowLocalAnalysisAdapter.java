@@ -18,6 +18,15 @@ import top.codejava.aiops.type.exception.ValidationException;
 @Component
 public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalAnalysisPort {
 
+    private final ProjectRuntimeConfigScanner projectRuntimeConfigScanner;
+    private final ProjectDependencyRequirementAnalyzer projectDependencyRequirementAnalyzer;
+
+    public DeterministicWorkflowLocalAnalysisAdapter(ProjectRuntimeConfigScanner projectRuntimeConfigScanner,
+                                                     ProjectDependencyRequirementAnalyzer projectDependencyRequirementAnalyzer) {
+        this.projectRuntimeConfigScanner = projectRuntimeConfigScanner;
+        this.projectDependencyRequirementAnalyzer = projectDependencyRequirementAnalyzer;
+    }
+
     @Override
     public WorkflowModels.LocalAnalysisPayload analyze(WorkflowModels.AnalyzeLocalRequest request) {
         Path projectPath = Path.of(request.projectPath()).toAbsolutePath().normalize();
@@ -39,7 +48,9 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
                 || rootEntries.contains("main.py");
         boolean hasGoMod = rootEntries.contains("go.mod");
         boolean hasCargo = rootEntries.contains("cargo.toml");
-        boolean hasIndexHtml = rootEntries.contains("index.html");
+        boolean hasIndexHtml = rootEntries.contains("index.html")
+                || Files.isRegularFile(projectPath.resolve("html/sky/index.html"))
+                || Files.isRegularFile(projectPath.resolve("html/index.html"));
 
         String language = "unknown";
         String framework = "generic";
@@ -48,6 +59,9 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
         Integer defaultPort = 8080;
         String jdkVersion = null;
         WorkflowModels.DeploymentHints deploymentHints = null;
+        String confirmedConfigChoice = request.confirmedConfigChoice();
+        List<WorkflowModels.RuntimeConfigItem> runtimeConfigItems = List.of();
+        List<WorkflowModels.DependencyRequirement> dependencyRequirements = List.of();
 
         List<WorkflowModels.StackComponent> components = new ArrayList<>();
         List<WorkflowModels.ConfigEvidence> evidences = new ArrayList<>();
@@ -60,7 +74,19 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
             framework = detectJavaFramework(projectPath);
             defaultPort = detectDefaultPort(projectPath, 8080);
             jdkVersion = detectJavaRelease(projectPath);
-            deploymentHints = buildJavaHints(projectPath, buildTool);
+            String preferredJavaSubpath = detectPreferredJavaSubpath(projectPath);
+            deploymentHints = buildJavaHints(preferredJavaSubpath, buildTool);
+            ProjectRuntimeConfigScanner.RuntimeConfigScanResult scanResult = projectRuntimeConfigScanner.scanJava(
+                    projectPath,
+                    preferredJavaSubpath,
+                    confirmedConfigChoice,
+                    request.configOverrides()
+            );
+            confirmedConfigChoice = scanResult.confirmedConfigChoice();
+            runtimeConfigItems = scanResult.runtimeConfigItems();
+            dependencyRequirements = projectDependencyRequirementAnalyzer.analyze(runtimeConfigItems);
+            evidences.addAll(scanResult.evidences());
+            warnings.addAll(scanResult.warnings());
             components.add(new WorkflowModels.StackComponent("Spring Boot", framework.startsWith("Spring Boot") ? extractSuffix(framework) : null, "web-framework"));
         } else if (hasPackageJson) {
             language = "JavaScript";
@@ -161,6 +187,18 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
             packaging = "nginx-static";
             defaultPort = 80;
             deploymentHints = buildNginxHints(projectPath, fileNames);
+            confirmedConfigChoice = confirmedConfigChoice == null || confirmedConfigChoice.isBlank()
+                    ? deploymentHints.recommendedConfigChoice()
+                    : confirmedConfigChoice;
+            ProjectRuntimeConfigScanner.RuntimeConfigScanResult scanResult = projectRuntimeConfigScanner.scanNginx(
+                    projectPath,
+                    confirmedConfigChoice,
+                    request.configOverrides()
+            );
+            confirmedConfigChoice = scanResult.confirmedConfigChoice();
+            runtimeConfigItems = scanResult.runtimeConfigItems();
+            evidences.addAll(scanResult.evidences());
+            warnings.addAll(scanResult.warnings());
             components.add(new WorkflowModels.StackComponent("Nginx", "1.27-alpine", "runtime"));
             warnings.add(new WorkflowModels.WorkflowWarning(
                     "STATIC_SITE_NO_BUILD",
@@ -193,14 +231,16 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
                 jdkVersion,
                 defaultPort,
                 deploymentHints,
+                confirmedConfigChoice,
+                runtimeConfigItems,
+                dependencyRequirements,
                 List.copyOf(components),
                 List.copyOf(evidences)
         );
         return new WorkflowModels.LocalAnalysisPayload(context, List.copyOf(warnings));
     }
 
-    private WorkflowModels.DeploymentHints buildJavaHints(Path projectPath, String buildTool) {
-        String preferredSubpath = detectPreferredJavaSubpath(projectPath);
+    private WorkflowModels.DeploymentHints buildJavaHints(String preferredSubpath, String buildTool) {
         String artifactPattern = "maven".equalsIgnoreCase(buildTool) ? "**/target/*.jar" : "**/build/libs/*.jar";
         String buildCommand = "maven".equalsIgnoreCase(buildTool)
                 ? "mvn -DskipTests clean package"
@@ -279,6 +319,9 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
     private String detectPreferredStaticSubpath(Path projectPath) {
         if (Files.isRegularFile(projectPath.resolve("html/sky/index.html"))) {
             return "html/sky";
+        }
+        if (Files.isRegularFile(projectPath.resolve("html/index.html"))) {
+            return "html";
         }
         if (Files.isRegularFile(projectPath.resolve("dist/index.html"))) {
             return "dist";

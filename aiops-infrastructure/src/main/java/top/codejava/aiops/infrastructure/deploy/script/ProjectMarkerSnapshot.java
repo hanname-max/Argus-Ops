@@ -7,6 +7,7 @@ import java.util.Locale;
 
 final class ProjectMarkerSnapshot {
 
+    private final Path projectRoot;
     private final boolean hasDockerfile;
     private final boolean hasPom;
     private final boolean hasGradle;
@@ -23,12 +24,15 @@ final class ProjectMarkerSnapshot {
     private final boolean hasAppJs;
     private final boolean hasMainJs;
     private final boolean hasIndexHtml;
+    private final boolean hasNginxConf;
+    private final boolean hasNestedStaticRoot;
     private final String dockerfileText;
     private final String packageJsonText;
     private final String appPyText;
     private final String mainPyText;
 
-    private ProjectMarkerSnapshot(boolean hasDockerfile,
+    private ProjectMarkerSnapshot(Path projectRoot,
+                                  boolean hasDockerfile,
                                   boolean hasPom,
                                   boolean hasGradle,
                                   boolean hasPackageJson,
@@ -44,10 +48,13 @@ final class ProjectMarkerSnapshot {
                                   boolean hasAppJs,
                                   boolean hasMainJs,
                                   boolean hasIndexHtml,
+                                  boolean hasNginxConf,
+                                  boolean hasNestedStaticRoot,
                                   String dockerfileText,
                                   String packageJsonText,
                                   String appPyText,
                                   String mainPyText) {
+        this.projectRoot = projectRoot;
         this.hasDockerfile = hasDockerfile;
         this.hasPom = hasPom;
         this.hasGradle = hasGradle;
@@ -64,6 +71,8 @@ final class ProjectMarkerSnapshot {
         this.hasAppJs = hasAppJs;
         this.hasMainJs = hasMainJs;
         this.hasIndexHtml = hasIndexHtml;
+        this.hasNginxConf = hasNginxConf;
+        this.hasNestedStaticRoot = hasNestedStaticRoot;
         this.dockerfileText = dockerfileText;
         this.packageJsonText = packageJsonText;
         this.appPyText = appPyText;
@@ -72,6 +81,7 @@ final class ProjectMarkerSnapshot {
 
     static ProjectMarkerSnapshot from(Path projectRoot) {
         return new ProjectMarkerSnapshot(
+                projectRoot,
                 Files.isRegularFile(projectRoot.resolve("Dockerfile")),
                 Files.isRegularFile(projectRoot.resolve("pom.xml")),
                 Files.isRegularFile(projectRoot.resolve("build.gradle")) || Files.isRegularFile(projectRoot.resolve("build.gradle.kts")),
@@ -88,6 +98,8 @@ final class ProjectMarkerSnapshot {
                 Files.isRegularFile(projectRoot.resolve("app.js")),
                 Files.isRegularFile(projectRoot.resolve("main.js")),
                 Files.isRegularFile(projectRoot.resolve("index.html")),
+                Files.isRegularFile(projectRoot.resolve("nginx.conf")) || Files.isRegularFile(projectRoot.resolve("conf/nginx.conf")),
+                Files.isRegularFile(projectRoot.resolve("html/sky/index.html")) || Files.isRegularFile(projectRoot.resolve("html/index.html")),
                 readLower(projectRoot.resolve("Dockerfile")),
                 readLower(projectRoot.resolve("package.json")),
                 readLower(projectRoot.resolve("app.py")),
@@ -133,6 +145,14 @@ final class ProjectMarkerSnapshot {
 
     boolean hasIndexHtml() {
         return hasIndexHtml;
+    }
+
+    boolean hasNginxConf() {
+        return hasNginxConf;
+    }
+
+    boolean hasNestedStaticRoot() {
+        return hasNestedStaticRoot;
     }
 
     boolean hasNodeLockfile() {
@@ -224,6 +244,29 @@ final class ProjectMarkerSnapshot {
     int customDockerfilePortOrDefault(int defaultPort) {
         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?im)^\\s*expose\\s+(\\d+)\\s*$").matcher(dockerfileText);
         return matcher.find() ? Integer.parseInt(matcher.group(1)) : defaultPort;
+    }
+
+    String detectStaticSourceRoot() {
+        if (hasIndexHtml) {
+            return ".";
+        }
+        if (Files.isRegularFile(projectRoot.resolve("html/sky/index.html"))) {
+            return "html/sky";
+        }
+        if (Files.isRegularFile(projectRoot.resolve("html/index.html"))) {
+            return "html";
+        }
+        return ".";
+    }
+
+    String detectNginxConfigSource() {
+        if (Files.isRegularFile(projectRoot.resolve("conf/nginx.conf"))) {
+            return "conf/nginx.conf";
+        }
+        if (Files.isRegularFile(projectRoot.resolve("nginx.conf"))) {
+            return "nginx.conf";
+        }
+        return null;
     }
 
     private static String readLower(Path file) {

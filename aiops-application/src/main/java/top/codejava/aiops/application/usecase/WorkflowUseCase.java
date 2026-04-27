@@ -57,7 +57,9 @@ public class WorkflowUseCase {
                 request.projectPath(),
                 request.operator(),
                 request.includeDependencyGraph(),
-                request.simulateCompile()
+                request.simulateCompile(),
+                request.confirmedConfigChoice(),
+                request.configOverrides()
         );
 
         WorkflowModels.LocalAnalysisPayload payload = workflowLocalAnalysisPort.analyze(normalizedRequest);
@@ -72,6 +74,8 @@ public class WorkflowUseCase {
                 payload.context(),
                 null,
                 null,
+                List.of(),
+                List.of(),
                 null
         ));
 
@@ -98,7 +102,8 @@ public class WorkflowUseCase {
                 request.expectedStateVersion(),
                 request.credential(),
                 defaultPort,
-                request.maxAutoIncrementProbeSpan()
+                request.maxAutoIncrementProbeSpan(),
+                request.dependencyDecisions()
         );
 
         WorkflowModels.TargetProbePayload payload = workflowTargetProbePort.probe(normalizedRequest, session.localContext());
@@ -113,6 +118,8 @@ public class WorkflowUseCase {
                 session.localContext(),
                 payload.targetProfile(),
                 payload.portProbeDecision(),
+                payload.dependencyProbeResults(),
+                payload.dependencyDecisions(),
                 null
         ));
 
@@ -121,6 +128,8 @@ public class WorkflowUseCase {
                 payload.targetProfile(),
                 payload.portProbeDecision(),
                 payload.existingDeployments(),
+                payload.dependencyProbeResults(),
+                payload.dependencyDecisions(),
                 payload.warnings()
         );
     }
@@ -146,6 +155,8 @@ public class WorkflowUseCase {
                 session.localContext(),
                 session.targetProfile(),
                 session.portProbeDecision(),
+                session.dependencyProbeResults(),
+                session.dependencyDecisions(),
                 metadata
         );
         WorkflowModels.WorkflowStateSnapshot runningSnapshot = snapshot(runningSession);
@@ -156,6 +167,8 @@ public class WorkflowUseCase {
                 session.localContext(),
                 session.targetProfile(),
                 session.portProbeDecision(),
+                session.dependencyProbeResults(),
+                session.dependencyDecisions(),
                 metadata
         );
 
@@ -196,6 +209,8 @@ public class WorkflowUseCase {
                     session.localContext(),
                     session.targetProfile(),
                     session.portProbeDecision(),
+                    session.dependencyProbeResults(),
+                    session.dependencyDecisions(),
                     metadata
             ));
             return Flux.just(new WorkflowModels.ScriptStreamEvent(
@@ -224,6 +239,8 @@ public class WorkflowUseCase {
                             session.localContext(),
                             session.targetProfile(),
                             session.portProbeDecision(),
+                            session.dependencyProbeResults(),
+                            session.dependencyDecisions(),
                             metadata
                     ));
                     return Flux.just(new WorkflowModels.ScriptStreamEvent(
@@ -267,6 +284,8 @@ public class WorkflowUseCase {
                 session.localContext(),
                 session.targetProfile(),
                 session.portProbeDecision(),
+                session.dependencyProbeResults(),
+                session.dependencyDecisions(),
                 session.scriptMetadata()
         ));
 

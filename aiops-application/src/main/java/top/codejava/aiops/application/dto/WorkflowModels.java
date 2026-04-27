@@ -14,7 +14,9 @@ public final class WorkflowModels {
             String projectPath,
             String operator,
             boolean includeDependencyGraph,
-            boolean simulateCompile
+            boolean simulateCompile,
+            String confirmedConfigChoice,
+            List<ConfigOverride> configOverrides
     ) {
     }
 
@@ -30,7 +32,8 @@ public final class WorkflowModels {
             Long expectedStateVersion,
             TargetCredential credential,
             Integer defaultApplicationPort,
-            Integer maxAutoIncrementProbeSpan
+            Integer maxAutoIncrementProbeSpan,
+            List<DependencyDecision> dependencyDecisions
     ) {
     }
 
@@ -39,6 +42,8 @@ public final class WorkflowModels {
             TargetSystemProfile targetProfile,
             PortProbeDecision portProbe,
             List<RemoteServiceHint> existingDeployments,
+            List<DependencyProbeResult> dependencyProbeResults,
+            List<DependencyDecision> dependencyDecisions,
             List<WorkflowWarning> warnings
     ) {
     }
@@ -94,6 +99,8 @@ public final class WorkflowModels {
             LocalProjectContext localContext,
             TargetSystemProfile targetProfile,
             PortProbeDecision portProbeDecision,
+            List<DependencyProbeResult> dependencyProbeResults,
+            List<DependencyDecision> dependencyDecisions,
             ScriptGenerationMetadata scriptMetadata
     ) {
     }
@@ -107,6 +114,9 @@ public final class WorkflowModels {
             String detectedJdkVersion,
             Integer defaultApplicationPort,
             DeploymentHints deploymentHints,
+            String confirmedConfigChoice,
+            List<RuntimeConfigItem> runtimeConfigItems,
+            List<DependencyRequirement> dependencyRequirements,
             List<StackComponent> stackComponents,
             List<ConfigEvidence> configEvidences
     ) {
@@ -153,6 +163,79 @@ public final class WorkflowModels {
             String key,
             String valuePreview,
             boolean inferred
+    ) {
+    }
+
+    public record ConfigSourceEvidence(
+            String key,
+            String valuePreview,
+            String modulePath,
+            String sourceFile,
+            String sourceProfile,
+            Integer sourceLine,
+            boolean effective
+    ) {
+    }
+
+    public record RuntimeConfigItem(
+            String id,
+            String family,
+            String applyStrategy,
+            String key,
+            String label,
+            String valuePreview,
+            String sourceModule,
+            String sourceFile,
+            String sourceProfile,
+            Integer sourceLine,
+            String originalValue,
+            boolean sensitive,
+            boolean placeholder,
+            boolean requiresConfirm,
+            String operatorHint,
+            List<ConfigSourceEvidence> sources
+    ) {
+    }
+
+    public record ConfigOverride(
+            String id,
+            String value
+    ) {
+    }
+
+    public record DependencyRequirement(
+            DependencyKind kind,
+            String displayName,
+            boolean required,
+            String host,
+            Integer port,
+            String databaseName,
+            String sourceKey,
+            String sourceModule,
+            String sourceFile,
+            String sourceProfile,
+            String operatorHint
+    ) {
+    }
+
+    public record DependencyProbeResult(
+            DependencyKind kind,
+            String displayName,
+            boolean required,
+            String expectedHost,
+            Integer expectedPort,
+            DependencyProbeStatus status,
+            String observedVersion,
+            String observedSource,
+            String message,
+            boolean requiresDecision
+    ) {
+    }
+
+    public record DependencyDecision(
+            DependencyKind kind,
+            DependencyDecisionMode mode,
+            String note
     ) {
     }
 
@@ -221,6 +304,8 @@ public final class WorkflowModels {
             LocalProjectContext localContext,
             TargetSystemProfile targetProfile,
             PortProbeDecision portProbeDecision,
+            List<DependencyProbeResult> dependencyProbeResults,
+            List<DependencyDecision> dependencyDecisions,
             ScriptGenerationMetadata metadata
     ) {
     }
@@ -271,6 +356,8 @@ public final class WorkflowModels {
             TargetSystemProfile targetProfile,
             PortProbeDecision portProbeDecision,
             List<RemoteServiceHint> existingDeployments,
+            List<DependencyProbeResult> dependencyProbeResults,
+            List<DependencyDecision> dependencyDecisions,
             List<WorkflowWarning> warnings
     ) {
     }
@@ -338,5 +425,25 @@ public final class WorkflowModels {
         MEDIUM,
         HIGH,
         CRITICAL
+    }
+
+    public enum DependencyKind {
+        MYSQL,
+        REDIS
+    }
+
+    public enum DependencyProbeStatus {
+        READY,
+        FOUND_INACTIVE,
+        NOT_FOUND,
+        UNREACHABLE,
+        UNKNOWN
+    }
+
+    public enum DependencyDecisionMode {
+        REUSE_EXISTING,
+        DEPLOY_AUTOMATICALLY,
+        MANUAL_PREPARE,
+        CONTINUE_ANYWAY
     }
 }

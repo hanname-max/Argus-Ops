@@ -14,11 +14,14 @@ public class ProbeContext {
     private final int requestedPort;
     private final int maxProbeSpan;
     private final int timeoutMillis;
+    private final List<WorkflowModels.DependencyRequirement> dependencyRequirements;
+    private final Map<WorkflowModels.DependencyKind, WorkflowModels.DependencyDecision> dependencyDecisionMap = new LinkedHashMap<>();
 
     private final Map<String, String> profileValues = new LinkedHashMap<>();
     private final List<Integer> triedPorts = new ArrayList<>();
     private final List<WorkflowModels.WorkflowWarning> warnings = new ArrayList<>();
     private final List<WorkflowModels.RemoteServiceHint> existingDeployments = new ArrayList<>();
+    private final List<WorkflowModels.DependencyProbeResult> dependencyProbeResults = new ArrayList<>();
 
     private boolean requestedPortOccupied;
     private Integer recommendedPort;
@@ -36,6 +39,14 @@ public class ProbeContext {
                 ? 1500
                 : Math.max(500, request.credential().connectTimeoutMillis());
         this.recommendedPort = this.requestedPort;
+        this.dependencyRequirements = localContext == null || localContext.dependencyRequirements() == null
+                ? List.of()
+                : List.copyOf(localContext.dependencyRequirements());
+        if (request.dependencyDecisions() != null) {
+            request.dependencyDecisions().stream()
+                    .filter(decision -> decision != null && decision.kind() != null && decision.mode() != null)
+                    .forEach(decision -> dependencyDecisionMap.put(decision.kind(), decision));
+        }
     }
 
     public WorkflowModels.ProbeTargetRequest request() {
@@ -72,6 +83,18 @@ public class ProbeContext {
 
     public List<WorkflowModels.RemoteServiceHint> existingDeployments() {
         return existingDeployments;
+    }
+
+    public List<WorkflowModels.DependencyRequirement> dependencyRequirements() {
+        return dependencyRequirements;
+    }
+
+    public Map<WorkflowModels.DependencyKind, WorkflowModels.DependencyDecision> dependencyDecisionMap() {
+        return dependencyDecisionMap;
+    }
+
+    public List<WorkflowModels.DependencyProbeResult> dependencyProbeResults() {
+        return dependencyProbeResults;
     }
 
     public boolean requestedPortOccupied() {

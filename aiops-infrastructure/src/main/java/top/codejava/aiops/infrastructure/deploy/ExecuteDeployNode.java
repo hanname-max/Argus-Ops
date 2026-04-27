@@ -9,6 +9,8 @@ import top.codejava.aiops.infrastructure.ops.SshCommandExecutorAdapter;
 @Order(60)
 public class ExecuteDeployNode implements DeployNode {
 
+    private static final int DEPLOY_COMMAND_TIMEOUT_MILLIS = 900_000;
+
     private final SshCommandExecutorAdapter sshCommandExecutorAdapter;
 
     public ExecuteDeployNode(SshCommandExecutorAdapter sshCommandExecutorAdapter) {
@@ -30,7 +32,8 @@ public class ExecuteDeployNode implements DeployNode {
                         context.request().applicationPort(),
                         context.workflowId(),
                         context.request().projectPath()
-                )
+                ),
+                DEPLOY_COMMAND_TIMEOUT_MILLIS
         );
         context.executionSummary(new DeployContext.SshExecutionSummary(
                 result.success(),

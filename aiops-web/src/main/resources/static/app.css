@@ -709,6 +709,139 @@ body::before {
   line-height: 1.8;
 }
 
+.config-section {
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.section-subhead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.section-subhead h4 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.section-subhead p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.config-choice-list,
+.config-list {
+  display: grid;
+  gap: 12px;
+}
+
+.config-choice,
+.config-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.config-choice {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.config-choice.selected {
+  border-color: rgba(15, 118, 110, 0.2);
+  background: rgba(15, 118, 110, 0.05);
+}
+
+.config-choice p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.config-card {
+  padding: 16px;
+}
+
+.config-card.needs-confirm {
+  border-color: rgba(181, 71, 8, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(181, 71, 8, 0.06);
+}
+
+.config-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.config-card-head strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.config-card-head code,
+.config-source {
+  color: var(--muted);
+  font: 12px/1.7 var(--font-mono);
+}
+
+.config-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.warn-pill {
+  color: var(--warn);
+  border-color: rgba(181, 71, 8, 0.16);
+  background: rgba(181, 71, 8, 0.08);
+}
+
+.config-source {
+  margin-top: 10px;
+}
+
+.config-input-row {
+  margin-top: 12px;
+}
+
+.config-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  font: 13px/1.4 var(--font-mono);
+}
+
+.config-input:focus {
+  outline: none;
+  border-color: rgba(15, 118, 110, 0.36);
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.08);
+}
+
+.config-hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
 .loading::after {
   content: "";
   width: 16px;

@@ -61,6 +61,10 @@ public class SshCommandExecutorAdapter {
     }
 
     public SshExecutionResult execute(RemoteDeployRequest request) {
+        return execute(request, DEFAULT_COMMAND_TIMEOUT_MILLIS);
+    }
+
+    public SshExecutionResult execute(RemoteDeployRequest request, int commandTimeoutMillis) {
         return execute(
                 new SshExecutionRequest(
                         request.host(),
@@ -70,7 +74,7 @@ public class SshCommandExecutorAdapter {
                         null,
                         request.command(),
                         DEFAULT_CONNECT_TIMEOUT_MILLIS,
-                        DEFAULT_COMMAND_TIMEOUT_MILLIS,
+                        commandTimeoutMillis,
                         request.useSudo(),
                         request.sudoPassword(),
                         false

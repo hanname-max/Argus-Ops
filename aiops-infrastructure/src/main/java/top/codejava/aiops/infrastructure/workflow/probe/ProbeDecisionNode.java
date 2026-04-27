@@ -66,6 +66,39 @@ public class ProbeDecisionNode implements ProbeNode {
             ));
         }
 
+        boolean unresolvedDependencies = false;
+        for (WorkflowModels.DependencyProbeResult dependencyProbeResult : context.dependencyProbeResults()) {
+            if (!dependencyProbeResult.requiresDecision()) {
+                continue;
+            }
+            WorkflowModels.DependencyDecision decision = context.dependencyDecisionMap().get(dependencyProbeResult.kind());
+            if (decision == null || decision.mode() == null) {
+                unresolvedDependencies = true;
+                context.warnings().add(new WorkflowModels.WorkflowWarning(
+                        "DEPENDENCY_CONFIRM_REQUIRED",
+                        WorkflowModels.Severity.HIGH,
+                        dependencyProbeResult.displayName() + " is not ready on the target host. Confirm whether to deploy it automatically.",
+                        "Choose whether to auto-deploy, prepare manually, or continue without provisioning this dependency."
+                ));
+                continue;
+            }
+            context.warnings().add(new WorkflowModels.WorkflowWarning(
+                    "DEPENDENCY_DECISION_CAPTURED",
+                    WorkflowModels.Severity.INFO,
+                    dependencyProbeResult.displayName() + " decision recorded as " + decision.mode() + ".",
+                    "Continue with script preview after confirming all dependency decisions."
+            ));
+        }
+
+        if (unresolvedDependencies) {
+            context.warnings().add(new WorkflowModels.WorkflowWarning(
+                    "DEPENDENCY_PROBE_INCOMPLETE",
+                    WorkflowModels.Severity.HIGH,
+                    "One or more required dependencies are missing or unreachable and still need operator confirmation.",
+                    "Review the dependency section in target probe and choose how each missing dependency should be handled."
+            ));
+        }
+
         context.portProbeDecision(new WorkflowModels.PortProbeDecision(
                 context.requestedPort(),
                 context.requestedPortOccupied(),
