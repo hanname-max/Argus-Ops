@@ -19,6 +19,10 @@
     dependencyProbeResults: [],
     dependencyDecisions: [],
     probeWarnings: [],
+    dependencyTesting: {},
+    dependencyDeploying: {},
+    dependencyConfigs: {},
+    dependencyIgnored: {},
     needsPortConfirm: false,
     portResolutionMessage: "",
     scriptRaw: "",
@@ -150,7 +154,14 @@
     }
 
     const dependencyKind = event.target.getAttribute("data-dependency-kind");
-    if (dependencyKind) {
+    const configKey = event.target.getAttribute("data-config-key");
+
+    if (dependencyKind && configKey) {
+      updateDependencyConfig(dependencyKind, configKey, event.target.value);
+      return;
+    }
+
+    if (dependencyKind && !configKey) {
       updateDependencyDecision(dependencyKind, event.target.value);
       return;
     }
@@ -173,6 +184,20 @@
     persist();
   }
 
+  function updateDependencyConfig(kind, key, value) {
+    state.dependencyConfigs = state.dependencyConfigs || {};
+    state.dependencyConfigs[kind] = state.dependencyConfigs[kind] || {};
+
+    if (key === "port") {
+      state.dependencyConfigs[kind][key] = value ? Number(value) : null;
+    } else {
+      state.dependencyConfigs[kind][key] = value;
+    }
+
+    state.probeDirty = true;
+    persist();
+  }
+
   function handleClick(event) {
     const target = event.target.closest("[data-action], [data-phase]");
     if (!target) {
@@ -189,6 +214,8 @@
     }
 
     const action = target.getAttribute("data-action");
+    const dependencyKind = target.getAttribute("data-dependency-kind");
+
     if (action === "scan") {
       void scanProject();
     } else if (action === "probe") {
@@ -199,6 +226,138 @@
       void deployProject();
     } else if (action === "diagnose") {
       void diagnoseLastFailure();
+    } else if (action === "test-dependency" && dependencyKind) {
+      void testDependencyConnection(dependencyKind);
+    } else if (action === "deploy-dependency" && dependencyKind) {
+      void deployDependency(dependencyKind);
+    } else if (action === "ignore-dependency" && dependencyKind) {
+      toggleDependencyIgnore(dependencyKind);
+    }
+  }
+
+  function toggleDependencyIgnore(kind) {
+    state.dependencyIgnored = state.dependencyIgnored || {};
+    state.dependencyIgnored[kind] = !state.dependencyIgnored[kind];
+
+    if (state.dependencyIgnored[kind]) {
+      pushLine(`[INFO] 已忽略 ${kind} 依赖检查`, "info");
+    } else {
+      pushLine(`[INFO] 已取消忽略 ${kind} 依赖检查`, "info");
+    }
+
+    persist();
+    renderAll();
+  }
+
+  function renderProbeWarnings() {
+    const warnings = state.probeWarnings || [];
+    if (!warnings.length) {
+      return "";
+    }
+
+    const importantWarnings = warnings.filter(w => w.severity !== "INFO");
+
+    if (!importantWarnings.length) {
+      return "";
+    }
+
+    return `
+      <div class="warning-list" style="margin-top: 18px;">
+        ${importantWarnings.map((warning) => {
+          const severityClass = getWarningSeverityClass(warning.severity);
+          return `
+            <div class="warning-card ${severityClass}">
+              <strong>${escapeHtml(warning.code)}</strong>
+              <p>${escapeHtml(warning.message)}</p>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  function getWarningSeverityClass(severity) {
+    if (!severity) return "";
+    switch (severity) {
+      case "INFO": return "info";
+      case "LOW": return "info";
+      case "MEDIUM": return "";
+      case "HIGH": return "";
+      case "CRITICAL": return "critical";
+      default: return "";
+    }
+  }
+
+  async function testDependencyConnection(kind) {
+    if (!state.form.targetHost) {
+      pushLine("[ERROR] 请先配置目标服务器地址", "error");
+      return;
+    }
+
+    state.dependencyTesting = state.dependencyTesting || {};
+    state.dependencyTesting[kind] = true;
+    renderAll();
+
+    try {
+      pushLine(`[INFO] 正在测试 ${kind} 连接...`, "info");
+
+      await syncProbeTarget({ force: true });
+
+      const result = findDependencyProbeResult(kind);
+      if (result) {
+        if (result.status === "READY") {
+          pushLine(`[SUCCESS] ${kind} 连接成功: ${result.message}`, "success");
+        } else if (result.status === "NOT_FOUND" || result.status === "UNREACHABLE") {
+          pushLine(`[WARN] ${kind} 连接失败: ${result.message}`, "warning");
+          pushLine(`[INFO] 准备探测可用端口并自动部署...`, "info");
+        } else {
+          pushLine(`[INFO] ${kind} 状态: ${result.status} - ${result.message}`, "info");
+        }
+      } else {
+        pushLine(`[INFO] 未找到 ${kind} 的探测结果`, "info");
+      }
+    } catch (error) {
+      pushLine(`[ERROR] 测试 ${kind} 连接失败: ${error.message}`, "error");
+    } finally {
+      state.dependencyTesting[kind] = false;
+      renderAll();
+    }
+  }
+
+  async function deployDependency(kind) {
+    if (!state.form.targetHost) {
+      pushLine("[ERROR] 请先配置目标服务器地址", "error");
+      return;
+    }
+
+    state.dependencyDeploying = state.dependencyDeploying || {};
+    state.dependencyDeploying[kind] = true;
+    renderAll();
+
+    try {
+      pushLine(`[INFO] 正在部署 ${kind}...`, "info");
+
+      updateDependencyDecision(kind, "DEPLOY_AUTOMATICALLY");
+
+      await syncProbeTarget({ force: true });
+
+      const result = findDependencyProbeResult(kind);
+      if (result) {
+        if (result.status === "READY") {
+          pushLine(`[SUCCESS] ${kind} 已就绪: ${result.message}`, "success");
+        } else {
+          pushLine(`[INFO] ${kind} 状态: ${result.status} - ${result.message}`, "info");
+          pushLine(`[INFO] 依赖将在主部署流程中自动配置`, "info");
+        }
+      }
+
+      pushLine(`[SUCCESS] ${kind} 部署决策已记录为 DEPLOY_AUTOMATICALLY`, "success");
+      pushLine(`[INFO] 继续主部署流程时将自动创建 ${kind} 实例`, "info");
+    } catch (error) {
+      pushLine(`[ERROR] 部署 ${kind} 失败: ${error.message}`, "error");
+    } finally {
+      state.dependencyDeploying[kind] = false;
+      renderAll();
     }
   }
 
@@ -401,17 +560,6 @@
 
       ${renderDependencyProbeSection()}
 
-      ${(state.probeWarnings || []).length ? `
-        <div class="warning-list" style="margin-top: 18px;">
-          ${(state.probeWarnings || []).map((warning) => `
-            <div class="warning-card">
-              <strong>${escapeHtml(warning.code)}</strong>
-              <p>${escapeHtml(warning.message)}</p>
-            </div>
-          `).join("")}
-        </div>
-      ` : ""}
-
       <div class="button-row">
         <button class="btn primary ${state.stepStatus[2] === "running" ? "loading" : ""}" data-action="probe">开始探测</button>
         <button class="btn secondary" data-phase="1">返回</button>
@@ -542,51 +690,189 @@
     }
 
     return `
-      <div class="config-section" style="margin-top: 18px;">
-        <div class="section-subhead">
+      <div class="dependency-section">
+        <div class="dependency-section-head">
           <div>
-            <h4>依赖探测与确认</h4>
-            <p>基于本地配置推导 MySQL / Redis 依赖，并通过 SSH 探测目标环境是否已存在、是否需要自动部署。</p>
+            <h4>中间件测试与部署</h4>
+            <p>测试 MySQL / Redis 等中间件连接状态。可自定义配置，测试后如果连接失败，系统将自动探测可用端口并通过 Docker 部署。</p>
           </div>
           <span class="pill"><strong>${requirements.length}</strong> 项</span>
         </div>
-        <div class="config-list">
+        <div class="dependency-list">
           ${requirements.map((requirement) => {
             const result = findDependencyProbeResult(requirement.kind);
-            const decision = findDependencyDecision(requirement.kind);
+            const statusClass = getStatusClass(result?.status);
+            const statusLabel = formatDependencyStatus(result);
+            const isTesting = state.dependencyTesting?.[requirement.kind] === true;
+            const isDeploying = state.dependencyDeploying?.[requirement.kind] === true;
+            const isIgnored = state.dependencyIgnored?.[requirement.kind] === true;
+
+            const customConfig = state.dependencyConfigs?.[requirement.kind] || {};
+            const host = customConfig.host ?? requirement.host ?? "localhost";
+            const port = customConfig.port ?? requirement.port ?? getDefaultPort(requirement.kind);
+            const databaseName = customConfig.databaseName ?? requirement.databaseName;
+            const username = customConfig.username ?? getDefaultUsername(requirement.kind);
+            const password = customConfig.password ?? "";
+
             return `
-              <div class="config-card ${(result?.requiresDecision || false) ? "needs-confirm" : ""}">
-                <div class="config-card-head">
-                  <div>
+              <div class="dependency-card ${isIgnored ? "ignored" : ""}">
+                <div class="dependency-card-head">
+                  <div class="dependency-card-title">
                     <strong>${escapeHtml(requirement.displayName || requirement.kind)}</strong>
                     <code>${escapeHtml(requirement.kind)}</code>
                   </div>
-                  <div class="config-tags">
-                    <span class="pill"><strong>${escapeHtml(formatDependencyStatus(result))}</strong></span>
+                  <div class="dependency-card-status">
+                    <span class="status-pill ${statusClass}">
+                      <span class="status-dot"></span>
+                      ${escapeHtml(statusLabel)}
+                    </span>
                     ${requirement.required ? `<span class="pill warn-pill"><strong>必需</strong></span>` : ""}
+                    ${isIgnored ? `<span class="pill" style="background: #fef3c7; color: #92400e;"><strong>已忽略</strong></span>` : ""}
                   </div>
                 </div>
-                <div class="config-source">来源：${escapeHtml(formatDependencySource(requirement))}</div>
-                <p class="config-hint">期望地址：${escapeHtml(requirement.host || "unknown")}:${escapeHtml(String(requirement.port || ""))}${requirement.databaseName ? ` / ${escapeHtml(requirement.databaseName)}` : ""}</p>
-                ${result ? `<p class="config-hint">探测结果：${escapeHtml(result.message || "Dependency probe completed.")}</p>` : `<p class="config-hint">尚未开始远端依赖探测。</p>`}
-                ${(result?.requiresDecision || false) ? `
-                  <p class="config-hint">${escapeHtml(formatDependencyDecisionPrompt(requirement, result))}</p>
-                  <div class="config-input-row">
-                    <label class="sr-only" for="dependency-${escapeAttribute(requirement.kind)}">依赖处理方式</label>
-                    <select
-                      id="dependency-${escapeAttribute(requirement.kind)}"
-                      class="config-input"
-                      data-dependency-kind="${escapeAttribute(requirement.kind)}">
-                      ${renderDependencyDecisionOptions(requirement, result, decision)}
-                    </select>
+
+                <div class="dependency-card-source">来源：${escapeHtml(formatDependencySource(requirement))} (AiOps 预设，可编辑)</div>
+
+                <div class="dependency-config-table">
+                  <div class="config-table-row">
+                    <div class="config-table-cell">
+                      <label>Host</label>
+                      <input
+                        type="text"
+                        class="config-input"
+                        data-dependency-kind="${escapeAttribute(requirement.kind)}"
+                        data-config-key="host"
+                        value="${escapeAttribute(host)}"
+                        placeholder="localhost">
+                    </div>
+                    <div class="config-table-cell">
+                      <label>Port</label>
+                      <input
+                        type="number"
+                        class="config-input"
+                        data-dependency-kind="${escapeAttribute(requirement.kind)}"
+                        data-config-key="port"
+                        value="${escapeAttribute(String(port))}"
+                        placeholder="${getDefaultPort(requirement.kind)}">
+                    </div>
                   </div>
-                ` : ""}
+                  ${requirement.kind === "MYSQL" ? `
+                    <div class="config-table-row">
+                      <div class="config-table-cell">
+                        <label>Database</label>
+                        <input
+                          type="text"
+                          class="config-input"
+                          data-dependency-kind="${escapeAttribute(requirement.kind)}"
+                          data-config-key="databaseName"
+                          value="${escapeAttribute(databaseName || "")}"
+                          placeholder="数据库名">
+                      </div>
+                      <div class="config-table-cell">
+                        <label>Username</label>
+                        <input
+                          type="text"
+                          class="config-input"
+                          data-dependency-kind="${escapeAttribute(requirement.kind)}"
+                          data-config-key="username"
+                          value="${escapeAttribute(username)}"
+                          placeholder="root">
+                      </div>
+                    </div>
+                    <div class="config-table-row">
+                      <div class="config-table-cell full">
+                        <label>Password</label>
+                        <input
+                          type="password"
+                          class="config-input"
+                          data-dependency-kind="${escapeAttribute(requirement.kind)}"
+                          data-config-key="password"
+                          value="${escapeAttribute(password)}"
+                          placeholder="密码（可选）">
+                      </div>
+                    </div>
+                  ` : `
+                    <div class="config-table-row">
+                      <div class="config-table-cell full">
+                        <label>Password</label>
+                        <input
+                          type="password"
+                          class="config-input"
+                          data-dependency-kind="${escapeAttribute(requirement.kind)}"
+                          data-config-key="password"
+                          value="${escapeAttribute(password)}"
+                          placeholder="Redis 密码（可选）">
+                      </div>
+                    </div>
+                  `}
+                </div>
+
+                ${result ? `
+                  <div class="dependency-card-hint">
+                    <strong>探测结果：</strong>${escapeHtml(result.message || "Dependency probe completed.")}
+                  </div>
+                ` : `
+                  <div class="dependency-card-hint">
+                    <strong>状态：</strong>尚未开始远端依赖探测。点击"测试连接"检查中间件状态。
+                  </div>
+                `}
+
+                <div class="dependency-card-actions">
+                  <button
+                    class="btn btn-sm btn-outline ${isTesting ? "loading" : ""}"
+                    data-action="test-dependency"
+                    data-dependency-kind="${escapeAttribute(requirement.kind)}"
+                    ${isTesting || isDeploying ? "disabled" : ""}>
+                    ${isTesting ? "测试中..." : "测试连接"}
+                  </button>
+                  <button
+                    class="btn btn-sm btn-outline ${isIgnored ? "btn-ignored" : ""}"
+                    data-action="ignore-dependency"
+                    data-dependency-kind="${escapeAttribute(requirement.kind)}"
+                    ${isTesting || isDeploying ? "disabled" : ""}>
+                    ${isIgnored ? "取消忽略" : "忽略"}
+                  </button>
+                  <button
+                    class="btn btn-sm btn-outline-accent ${isDeploying ? "loading" : ""}"
+                    data-action="deploy-dependency"
+                    data-dependency-kind="${escapeAttribute(requirement.kind)}"
+                    ${isDeploying ? "disabled" : ""}>
+                    ${isDeploying ? "部署中..." : "部署"}
+                  </button>
+                </div>
               </div>
             `;
           }).join("")}
         </div>
       </div>
     `;
+  }
+
+  function getDefaultUsername(kind) {
+    switch (kind) {
+      case "MYSQL": return "root";
+      case "REDIS": return "";
+      default: return "";
+    }
+  }
+
+  function getDefaultPort(kind) {
+    switch (kind) {
+      case "MYSQL": return 3306;
+      case "REDIS": return 6379;
+      default: return 0;
+    }
+  }
+
+  function getStatusClass(status) {
+    if (!status) return "unknown";
+    switch (status) {
+      case "READY": return "ready";
+      case "NOT_FOUND": return "not-found";
+      case "UNREACHABLE": return "unreachable";
+      case "FOUND_INACTIVE": return "found-inactive";
+      default: return "unknown";
+    }
   }
 
   function renderConfigChoiceSection() {
@@ -1310,6 +1596,10 @@
     state.dependencyProbeResults = [];
     state.dependencyDecisions = [];
     state.probeWarnings = [];
+    state.dependencyTesting = {};
+    state.dependencyDeploying = {};
+    state.dependencyConfigs = {};
+    state.dependencyIgnored = {};
     state.needsPortConfirm = false;
     state.portResolutionMessage = "";
     state.scriptRaw = "";
