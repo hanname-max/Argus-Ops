@@ -101,6 +101,13 @@ public class WorkflowController {
         return workflowUseCase.analyzeLog(request);
     }
 
+    @PostMapping("/deploy-dependency")
+    public WorkflowModels.DeployDependencyResponse deployDependency(
+            @RequestBody WorkflowModels.DeployDependencyRequest request
+    ) {
+        return workflowUseCase.deployDependency(request);
+    }
+
     private ServerSentEvent<WorkflowModels.ScriptStreamEvent> toSse(WorkflowModels.ScriptStreamEvent event) {
         return ServerSentEvent.<WorkflowModels.ScriptStreamEvent>builder()
                 .id(event.workflowId() + ":" + event.sequence())

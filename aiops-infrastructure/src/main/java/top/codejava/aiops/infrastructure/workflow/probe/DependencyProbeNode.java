@@ -32,7 +32,7 @@ public class DependencyProbeNode implements ProbeNode {
                                                                  WorkflowModels.DependencyRequirement requirement) {
         if (requirement.host() == null || requirement.host().isBlank() || isPlaceholder(requirement.host())) {
             return result(requirement, WorkflowModels.DependencyProbeStatus.UNKNOWN, null, "config",
-                    "Dependency host is not confirmed from local config.", true);
+                    "Dependency host is not confirmed. Please provide a valid host address.", true);
         }
 
         if (isLocalHost(requirement.host())) {
@@ -43,9 +43,10 @@ public class DependencyProbeNode implements ProbeNode {
 
     private WorkflowModels.DependencyProbeResult probeLocalDependency(ProbeContext context,
                                                                      WorkflowModels.DependencyRequirement requirement) {
+        WorkflowModels.DependencyOverride override = context.dependencyOverride(requirement.kind());
         String command = switch (requirement.kind()) {
-            case MYSQL -> localMysqlCommand(context, requirement);
-            case REDIS -> localRedisCommand(requirement.port() == null ? 6379 : requirement.port());
+            case MYSQL -> localMysqlCommand(context, requirement, override);
+            case REDIS -> localRedisCommand(requirement, override);
         };
         SshCommandExecutorAdapter.SshExecutionResult result = sshCommandExecutorAdapter.execute(
                 context.request().credential(),
@@ -72,19 +73,11 @@ public class DependencyProbeNode implements ProbeNode {
     private WorkflowModels.DependencyProbeResult probeExternalDependency(ProbeContext context,
                                                                         WorkflowModels.DependencyRequirement requirement) {
         int port = requirement.port() == null ? defaultPort(requirement.kind()) : requirement.port();
-        String command = """
-                TARGET_HOST=%s
-                TARGET_PORT=%d
-                if timeout 3 bash -lc "</dev/tcp/${TARGET_HOST}/${TARGET_PORT}" >/dev/null 2>&1; then
-                  printf 'AIOPS_DEP_STATUS=READY\\n'
-                  printf 'AIOPS_DEP_SOURCE=tcp\\n'
-                  printf 'AIOPS_DEP_MESSAGE=External dependency is reachable from the target host.\\n'
-                else
-                  printf 'AIOPS_DEP_STATUS=UNREACHABLE\\n'
-                  printf 'AIOPS_DEP_SOURCE=tcp\\n'
-                  printf 'AIOPS_DEP_MESSAGE=External dependency is not reachable from the target host.\\n'
-                fi
-                """.formatted(shellSafe(requirement.host()), port);
+        WorkflowModels.DependencyOverride override = context.dependencyOverride(requirement.kind());
+        String command = switch (requirement.kind()) {
+            case MYSQL -> externalMysqlCommand(requirement, port, override);
+            case REDIS -> externalRedisCommand(requirement, port, override);
+        };
         SshCommandExecutorAdapter.SshExecutionResult result = sshCommandExecutorAdapter.execute(
                 context.request().credential(),
                 command,
@@ -107,6 +100,416 @@ public class DependencyProbeNode implements ProbeNode {
         );
     }
 
+    private String localMysqlCommand(ProbeContext context,
+                                      WorkflowModels.DependencyRequirement requirement,
+                                      WorkflowModels.DependencyOverride override) {
+        int port = requirement.port() == null ? 3306 : requirement.port();
+
+        String username = null;
+        String password = null;
+        String databaseName = requirement.databaseName();
+
+        if (override != null) {
+            if (override.username() != null && !override.username().isBlank()) {
+                username = override.username();
+            }
+            if (override.password() != null) {
+                password = override.password();
+            }
+            if (override.databaseName() != null && !override.databaseName().isBlank()) {
+                databaseName = override.databaseName();
+            }
+        }
+
+        if (username == null || username.isBlank()) {
+            username = runtimeConfigValue(context,
+                    "sky.datasource.username",
+                    "spring.datasource.username",
+                    "spring.datasource.druid.username",
+                    "spring.datasource.hikari.username");
+            if (username == null || username.isBlank()) {
+                username = "root";
+            }
+        }
+
+        if (password == null) {
+            password = runtimeConfigValue(context,
+                    "sky.datasource.password",
+                    "spring.datasource.password",
+                    "spring.datasource.druid.password",
+                    "spring.datasource.hikari.password");
+            if (password == null) {
+                password = "";
+            }
+        }
+
+        StringBuilder command = new StringBuilder();
+        command.append("TARGET_PORT=").append(port).append("\n");
+        command.append("MYSQL_USER=").append(shellQuote(username)).append("\n");
+        command.append("MYSQL_PASSWORD=").append(shellQuote(password)).append("\n");
+        command.append("DATABASE_NAME=").append(shellQuote(databaseName == null ? "" : databaseName)).append("\n");
+        command.append("""
+                CONTAINER_ID=
+                CONTAINER_PORT_MATCH=0
+                CONTAINER_VERSION=
+                PORT_LISTENING=0
+                SERVICE_ACTIVE=0
+                RUNTIME_EXISTS=0
+
+                if command -v docker >/dev/null 2>&1; then
+                  while IFS= read -r line; do
+                    [ -z "$line" ] && continue
+                    IMAGE=$(printf '%s' "$line" | cut -d'|' -f1)
+                    NAME=$(printf '%s' "$line" | cut -d'|' -f2)
+                    PORTS=$(printf '%s' "$line" | cut -d'|' -f3)
+
+                    if echo "$PORTS" | grep -qE "(^|[^0-9])${TARGET_PORT}->"; then
+                      CONTAINER_ID="$NAME"
+                      CONTAINER_PORT_MATCH=1
+                      CONTAINER_VERSION="$IMAGE"
+                      break
+                    fi
+                  done <<EOF
+                $(docker ps --format '{{.Image}}|{{.Names}}|{{.Ports}}' | grep -Ei 'mysql|mariadb' || true)
+                EOF
+                fi
+
+                if ss -lntH "( sport = :$TARGET_PORT )" 2>/dev/null | grep -q .; then
+                  PORT_LISTENING=1
+                fi
+
+                if systemctl is-active mysqld >/dev/null 2>&1 || systemctl is-active mysql >/dev/null 2>&1 || systemctl is-active mariadb >/dev/null 2>&1; then
+                  SERVICE_ACTIVE=1
+                fi
+
+                if command -v mysqld >/dev/null 2>&1 || command -v mysql >/dev/null 2>&1; then
+                  RUNTIME_EXISTS=1
+                fi
+
+                DB_VERIFIED=0
+                DB_EXISTS=0
+
+                if [ "$CONTAINER_PORT_MATCH" = "1" ]; then
+                  if docker exec "$CONTAINER_ID" mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; then
+                    DB_VERIFIED=1
+                    if [ -n "$DATABASE_NAME" ]; then
+                      DB_EXISTS=$(docker exec "$CONTAINER_ID" mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -Nse "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$DATABASE_NAME'" 2>/dev/null || true)
+                    fi
+                  fi
+                elif [ "$PORT_LISTENING" = "1" ] && command -v mysql >/dev/null 2>&1; then
+                  if mysql -h 127.0.0.1 -P "$TARGET_PORT" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; then
+                    DB_VERIFIED=1
+                    if [ -n "$DATABASE_NAME" ]; then
+                      DB_EXISTS=$(mysql -h 127.0.0.1 -P "$TARGET_PORT" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -Nse "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$DATABASE_NAME'" 2>/dev/null || true)
+                    fi
+                  fi
+                fi
+
+                if [ "$DB_VERIFIED" = "1" ] && { [ -z "$DATABASE_NAME" ] || [ -n "$DB_EXISTS" ]; }; then
+                  STATUS_VALUE=READY
+                  if [ "$CONTAINER_PORT_MATCH" = "1" ]; then
+                    SOURCE_VALUE=docker
+                    VERSION_VALUE="$CONTAINER_VERSION"
+                  else
+                    SOURCE_VALUE=mysql
+                    VERSION_VALUE=
+                  fi
+                  if [ -n "$DATABASE_NAME" ] && [ -n "$DB_EXISTS" ]; then
+                    MESSAGE_VALUE='MySQL service is reachable with valid credentials and database exists on the target host.'
+                  else
+                    MESSAGE_VALUE='MySQL service is reachable with valid credentials on the target host.'
+                  fi
+                elif [ "$CONTAINER_PORT_MATCH" = "1" ]; then
+                  STATUS_VALUE=FOUND_INACTIVE
+                  SOURCE_VALUE=docker
+                  VERSION_VALUE="$CONTAINER_VERSION"
+                  MESSAGE_VALUE='MySQL container is running on the expected port but credentials or database could not be verified.'
+                elif [ "$PORT_LISTENING" = "1" ]; then
+                  STATUS_VALUE=UNKNOWN
+                  SOURCE_VALUE=port
+                  VERSION_VALUE=
+                  MESSAGE_VALUE='Port is listening but MySQL protocol verification failed (credentials may be incorrect or mysql client not available).'
+                elif [ "$SERVICE_ACTIVE" = "1" ]; then
+                  STATUS_VALUE=FOUND_INACTIVE
+                  SOURCE_VALUE=systemd
+                  VERSION_VALUE=
+                  MESSAGE_VALUE='MySQL service is active but not listening on the expected port or verification failed.'
+                elif [ "$RUNTIME_EXISTS" = "1" ]; then
+                  STATUS_VALUE=FOUND_INACTIVE
+                  SOURCE_VALUE=host
+                  VERSION_VALUE=
+                  MESSAGE_VALUE='MySQL-compatible runtime exists but does not appear ready.'
+                else
+                  STATUS_VALUE=NOT_FOUND
+                  SOURCE_VALUE=host
+                  VERSION_VALUE=
+                  MESSAGE_VALUE='MySQL-compatible runtime was not detected on the target host.'
+                fi
+
+                printf 'AIOPS_DEP_STATUS=%s\\n' "$STATUS_VALUE"
+                printf 'AIOPS_DEP_SOURCE=%s\\n' "$SOURCE_VALUE"
+                printf 'AIOPS_DEP_VERSION=%s\\n' "$VERSION_VALUE"
+                printf 'AIOPS_DEP_MESSAGE=%s\\n' "$MESSAGE_VALUE"
+                """);
+        return command.toString();
+    }
+
+    private String localRedisCommand(WorkflowModels.DependencyRequirement requirement,
+                                      WorkflowModels.DependencyOverride override) {
+        int port = requirement.port() == null ? 6379 : requirement.port();
+        String password = null;
+
+        if (override != null && override.password() != null) {
+            password = override.password();
+        }
+
+        if (password == null) {
+            password = "";
+        }
+
+        return """
+                TARGET_PORT=%d
+                REDIS_PASSWORD=%s
+
+                CONTAINER_ID=
+                CONTAINER_PORT_MATCH=0
+                CONTAINER_VERSION=
+                PORT_LISTENING=0
+                SERVICE_ACTIVE=0
+                RUNTIME_EXISTS=0
+
+                if command -v docker >/dev/null 2>&1; then
+                  while IFS= read -r line; do
+                    [ -z "$line" ] && continue
+                    IMAGE=$(printf '%s' "$line" | cut -d'|' -f1)
+                    NAME=$(printf '%s' "$line" | cut -d'|' -f2)
+                    PORTS=$(printf '%s' "$line" | cut -d'|' -f3)
+
+                    if echo "$PORTS" | grep -qE "(^|[^0-9])${TARGET_PORT}->"; then
+                      CONTAINER_ID="$NAME"
+                      CONTAINER_PORT_MATCH=1
+                      CONTAINER_VERSION="$IMAGE"
+                      break
+                    fi
+                  done <<EOF
+                $(docker ps --format '{{.Image}}|{{.Names}}|{{.Ports}}' | grep -Ei 'redis' || true)
+                EOF
+                fi
+
+                if ss -lntH "( sport = :$TARGET_PORT )" 2>/dev/null | grep -q .; then
+                  PORT_LISTENING=1
+                fi
+
+                if systemctl is-active redis >/dev/null 2>&1 || systemctl is-active redis-server >/dev/null 2>&1; then
+                  SERVICE_ACTIVE=1
+                fi
+
+                if command -v redis-server >/dev/null 2>&1 || command -v redis-cli >/dev/null 2>&1; then
+                  RUNTIME_EXISTS=1
+                fi
+
+                PING_SUCCESS=0
+
+                if [ "$CONTAINER_PORT_MATCH" = "1" ]; then
+                  if [ -n "$REDIS_PASSWORD" ]; then
+                    if docker exec "$CONTAINER_ID" redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q '^PONG$'; then
+                      PING_SUCCESS=1
+                    fi
+                  else
+                    if docker exec "$CONTAINER_ID" redis-cli ping 2>/dev/null | grep -q '^PONG$'; then
+                      PING_SUCCESS=1
+                    fi
+                  fi
+                elif [ "$PORT_LISTENING" = "1" ] && command -v redis-cli >/dev/null 2>&1; then
+                  if [ -n "$REDIS_PASSWORD" ]; then
+                    if redis-cli -h 127.0.0.1 -p "$TARGET_PORT" -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q '^PONG$'; then
+                      PING_SUCCESS=1
+                    fi
+                  else
+                    if redis-cli -h 127.0.0.1 -p "$TARGET_PORT" ping 2>/dev/null | grep -q '^PONG$'; then
+                      PING_SUCCESS=1
+                    fi
+                  fi
+                fi
+
+                if [ "$PING_SUCCESS" = "1" ]; then
+                  STATUS_VALUE=READY
+                  if [ "$CONTAINER_PORT_MATCH" = "1" ]; then
+                    SOURCE_VALUE=docker
+                    VERSION_VALUE="$CONTAINER_VERSION"
+                  else
+                    SOURCE_VALUE=redis
+                    VERSION_VALUE=
+                  fi
+                  MESSAGE_VALUE='Redis is reachable with valid credentials on the target host (PING returned PONG).'
+                elif [ "$CONTAINER_PORT_MATCH" = "1" ]; then
+                  STATUS_VALUE=FOUND_INACTIVE
+                  SOURCE_VALUE=docker
+                  VERSION_VALUE="$CONTAINER_VERSION"
+                  MESSAGE_VALUE='Redis container is running on the expected port but PING verification failed (password may be incorrect).'
+                elif [ "$PORT_LISTENING" = "1" ]; then
+                  STATUS_VALUE=UNKNOWN
+                  SOURCE_VALUE=port
+                  VERSION_VALUE=
+                  MESSAGE_VALUE='Port is listening but Redis protocol verification failed (password may be incorrect or redis-cli not available).'
+                elif [ "$SERVICE_ACTIVE" = "1" ]; then
+                  STATUS_VALUE=FOUND_INACTIVE
+                  SOURCE_VALUE=systemd
+                  VERSION_VALUE=
+                  MESSAGE_VALUE='Redis service is active but not listening on the expected port or verification failed.'
+                elif [ "$RUNTIME_EXISTS" = "1" ]; then
+                  STATUS_VALUE=FOUND_INACTIVE
+                  SOURCE_VALUE=host
+                  VERSION_VALUE=
+                  MESSAGE_VALUE='Redis runtime exists but does not appear ready.'
+                else
+                  STATUS_VALUE=NOT_FOUND
+                  SOURCE_VALUE=host
+                  VERSION_VALUE=
+                  MESSAGE_VALUE='Redis runtime was not detected on the target host.'
+                fi
+
+                printf 'AIOPS_DEP_STATUS=%s\\n' "$STATUS_VALUE"
+                printf 'AIOPS_DEP_SOURCE=%s\\n' "$SOURCE_VALUE"
+                printf 'AIOPS_DEP_VERSION=%s\\n' "$VERSION_VALUE"
+                printf 'AIOPS_DEP_MESSAGE=%s\\n' "$MESSAGE_VALUE"
+                """.formatted(port, shellQuote(password));
+    }
+
+    private String externalMysqlCommand(WorkflowModels.DependencyRequirement requirement,
+                                         int port,
+                                         WorkflowModels.DependencyOverride override) {
+        String host = requirement.host();
+        String username = "root";
+        String password = "";
+        String databaseName = requirement.databaseName();
+
+        if (override != null) {
+            if (override.username() != null && !override.username().isBlank()) {
+                username = override.username();
+            }
+            if (override.password() != null) {
+                password = override.password();
+            }
+            if (override.databaseName() != null && !override.databaseName().isBlank()) {
+                databaseName = override.databaseName();
+            }
+        }
+
+        return """
+                TARGET_HOST=%s
+                TARGET_PORT=%d
+                MYSQL_USER=%s
+                MYSQL_PASSWORD=%s
+                DATABASE_NAME=%s
+
+                TCP_REACHABLE=0
+                DB_VERIFIED=0
+                DB_EXISTS=0
+
+                if timeout 3 bash -lc "</dev/tcp/${TARGET_HOST}/${TARGET_PORT}" >/dev/null 2>&1; then
+                  TCP_REACHABLE=1
+                fi
+
+                if [ "$TCP_REACHABLE" = "1" ] && command -v mysql >/dev/null 2>&1; then
+                  if mysql -h "$TARGET_HOST" -P "$TARGET_PORT" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; then
+                    DB_VERIFIED=1
+                    if [ -n "$DATABASE_NAME" ]; then
+                      DB_EXISTS=$(mysql -h "$TARGET_HOST" -P "$TARGET_PORT" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -Nse "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$DATABASE_NAME'" 2>/dev/null || true)
+                    fi
+                  fi
+                fi
+
+                if [ "$DB_VERIFIED" = "1" ] && { [ -z "$DATABASE_NAME" ] || [ -n "$DB_EXISTS" ]; }; then
+                  STATUS_VALUE=READY
+                  SOURCE_VALUE=mysql
+                  if [ -n "$DATABASE_NAME" ] && [ -n "$DB_EXISTS" ]; then
+                    MESSAGE_VALUE='External MySQL is reachable with valid credentials and database exists.'
+                  else
+                    MESSAGE_VALUE='External MySQL is reachable with valid credentials.'
+                  fi
+                elif [ "$TCP_REACHABLE" = "1" ]; then
+                  STATUS_VALUE=UNKNOWN
+                  SOURCE_VALUE=tcp
+                  MESSAGE_VALUE='External host port is reachable but MySQL protocol verification failed (credentials may be incorrect or mysql client not available).'
+                else
+                  STATUS_VALUE=UNREACHABLE
+                  SOURCE_VALUE=tcp
+                  MESSAGE_VALUE='External dependency is not reachable from the target host.'
+                fi
+
+                printf 'AIOPS_DEP_STATUS=%s\\n' "$STATUS_VALUE"
+                printf 'AIOPS_DEP_SOURCE=%s\\n' "$SOURCE_VALUE"
+                printf 'AIOPS_DEP_VERSION=%s\\n' ''
+                printf 'AIOPS_DEP_MESSAGE=%s\\n' "$MESSAGE_VALUE"
+                """.formatted(
+                        shellSafe(host),
+                        port,
+                        shellQuote(username),
+                        shellQuote(password),
+                        shellQuote(databaseName == null ? "" : databaseName)
+                );
+    }
+
+    private String externalRedisCommand(WorkflowModels.DependencyRequirement requirement,
+                                         int port,
+                                         WorkflowModels.DependencyOverride override) {
+        String host = requirement.host();
+        String password = "";
+
+        if (override != null && override.password() != null) {
+            password = override.password();
+        }
+
+        return """
+                TARGET_HOST=%s
+                TARGET_PORT=%d
+                REDIS_PASSWORD=%s
+
+                TCP_REACHABLE=0
+                PING_SUCCESS=0
+
+                if timeout 3 bash -lc "</dev/tcp/${TARGET_HOST}/${TARGET_PORT}" >/dev/null 2>&1; then
+                  TCP_REACHABLE=1
+                fi
+
+                if [ "$TCP_REACHABLE" = "1" ] && command -v redis-cli >/dev/null 2>&1; then
+                  if [ -n "$REDIS_PASSWORD" ]; then
+                    if redis-cli -h "$TARGET_HOST" -p "$TARGET_PORT" -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q '^PONG$'; then
+                      PING_SUCCESS=1
+                    fi
+                  else
+                    if redis-cli -h "$TARGET_HOST" -p "$TARGET_PORT" ping 2>/dev/null | grep -q '^PONG$'; then
+                      PING_SUCCESS=1
+                    fi
+                  fi
+                fi
+
+                if [ "$PING_SUCCESS" = "1" ]; then
+                  STATUS_VALUE=READY
+                  SOURCE_VALUE=redis
+                  MESSAGE_VALUE='External Redis is reachable with valid credentials (PING returned PONG).'
+                elif [ "$TCP_REACHABLE" = "1" ]; then
+                  STATUS_VALUE=UNKNOWN
+                  SOURCE_VALUE=tcp
+                  MESSAGE_VALUE='External host port is reachable but Redis protocol verification failed (password may be incorrect or redis-cli not available).'
+                else
+                  STATUS_VALUE=UNREACHABLE
+                  SOURCE_VALUE=tcp
+                  MESSAGE_VALUE='External dependency is not reachable from the target host.'
+                fi
+
+                printf 'AIOPS_DEP_STATUS=%s\\n' "$STATUS_VALUE"
+                printf 'AIOPS_DEP_SOURCE=%s\\n' "$SOURCE_VALUE"
+                printf 'AIOPS_DEP_VERSION=%s\\n' ''
+                printf 'AIOPS_DEP_MESSAGE=%s\\n' "$MESSAGE_VALUE"
+                """.formatted(
+                        shellSafe(host),
+                        port,
+                        shellQuote(password)
+                );
+    }
+
     private WorkflowModels.DependencyProbeResult result(WorkflowModels.DependencyRequirement requirement,
                                                         WorkflowModels.DependencyProbeStatus status,
                                                         String version,
@@ -125,124 +528,6 @@ public class DependencyProbeNode implements ProbeNode {
                 message,
                 requiresDecision
         );
-    }
-
-    private String localMysqlCommand(ProbeContext context, WorkflowModels.DependencyRequirement requirement) {
-        int port = requirement.port() == null ? 3306 : requirement.port();
-        String username = runtimeConfigValue(context,
-                "sky.datasource.username",
-                "spring.datasource.username",
-                "spring.datasource.druid.username",
-                "spring.datasource.hikari.username");
-        String password = runtimeConfigValue(context,
-                "sky.datasource.password",
-                "spring.datasource.password",
-                "spring.datasource.druid.password",
-                "spring.datasource.hikari.password");
-        String databaseName = requirement.databaseName();
-
-        StringBuilder command = new StringBuilder();
-        command.append("PORT=").append(port).append("\n");
-        command.append("MYSQL_USER=").append(shellQuote(username == null || username.isBlank() ? "root" : username)).append("\n");
-        command.append("MYSQL_PASSWORD=").append(shellQuote(password == null ? "" : password)).append("\n");
-        command.append("DATABASE_NAME=").append(shellQuote(databaseName == null ? "" : databaseName)).append("\n");
-        command.append("""
-                if command -v docker >/dev/null 2>&1; then
-                  RUNNING=$(docker ps --format '{{.Image}}|{{.Names}}|{{.Ports}}' | grep -Ei 'mysql|mariadb' | head -n 1 || true)
-                  STOPPED=$(docker ps -a --format '{{.Image}}|{{.Names}}|{{.Status}}' | grep -Ei 'mysql|mariadb' | head -n 1 || true)
-                else
-                  RUNNING=
-                  STOPPED=
-                fi
-                if [ -n "$RUNNING" ]; then
-                  MYSQL_CONTAINER=$(printf '%s' "$RUNNING" | cut -d'|' -f2)
-                else
-                  MYSQL_CONTAINER=
-                fi
-                if [ -n "$RUNNING" ]; then
-                  STATUS_VALUE=READY
-                  SOURCE_VALUE=docker
-                  VERSION_VALUE=$(printf '%s' "$RUNNING" | cut -d'|' -f1)
-                  MESSAGE_VALUE='MySQL-compatible container is running on the target host.'
-                elif ss -lnt 2>/dev/null | grep -q ":$PORT "; then
-                  STATUS_VALUE=READY
-                  SOURCE_VALUE=port
-                  VERSION_VALUE=
-                  MESSAGE_VALUE='Target host is listening on the expected MySQL port.'
-                elif systemctl is-active mysqld >/dev/null 2>&1 || systemctl is-active mysql >/dev/null 2>&1 || systemctl is-active mariadb >/dev/null 2>&1; then
-                  STATUS_VALUE=READY
-                  SOURCE_VALUE=systemd
-                  VERSION_VALUE=
-                  MESSAGE_VALUE='MySQL or MariaDB service is active on the target host.'
-                elif [ -n "$STOPPED" ] || command -v mysqld >/dev/null 2>&1 || command -v mysql >/dev/null 2>&1; then
-                  STATUS_VALUE=FOUND_INACTIVE
-                  SOURCE_VALUE=host
-                  VERSION_VALUE=
-                  MESSAGE_VALUE='MySQL-compatible runtime exists but does not appear ready.'
-                else
-                  STATUS_VALUE=NOT_FOUND
-                  SOURCE_VALUE=host
-                  VERSION_VALUE=
-                  MESSAGE_VALUE='MySQL-compatible runtime was not detected on the target host.'
-                fi
-                if [ "$STATUS_VALUE" = "READY" ] && [ -n "$DATABASE_NAME" ]; then
-                  DB_EXISTS=
-                  DB_VERIFIED=0
-                  if [ -n "$MYSQL_CONTAINER" ]; then
-                    DB_VERIFIED=1
-                    DB_EXISTS=$(docker exec "$MYSQL_CONTAINER" mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -Nse "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$DATABASE_NAME'" 2>/dev/null || true)
-                  elif command -v mysql >/dev/null 2>&1; then
-                    DB_VERIFIED=1
-                    DB_EXISTS=$(mysql -h 127.0.0.1 -P "$PORT" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -Nse "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$DATABASE_NAME'" 2>/dev/null || true)
-                  fi
-                  if [ "$DB_VERIFIED" = "1" ] && [ -z "$DB_EXISTS" ]; then
-                    STATUS_VALUE=FOUND_INACTIVE
-                    MESSAGE_VALUE='MySQL service is reachable, but the configured database or credentials could not be verified.'
-                  elif [ "$DB_VERIFIED" = "1" ]; then
-                    MESSAGE_VALUE='MySQL service and configured database are reachable on the target host.'
-                  fi
-                fi
-                printf 'AIOPS_DEP_STATUS=%s\\n' "$STATUS_VALUE"
-                printf 'AIOPS_DEP_SOURCE=%s\\n' "$SOURCE_VALUE"
-                printf 'AIOPS_DEP_VERSION=%s\\n' "$VERSION_VALUE"
-                printf 'AIOPS_DEP_MESSAGE=%s\\n' "$MESSAGE_VALUE"
-                """);
-        return command.toString();
-    }
-
-    private String localRedisCommand(int port) {
-        return """
-                PORT=%d
-                if command -v docker >/dev/null 2>&1; then
-                  RUNNING=$(docker ps --format '{{.Image}}|{{.Names}}|{{.Ports}}' | grep -Ei 'redis' | head -n 1 || true)
-                  STOPPED=$(docker ps -a --format '{{.Image}}|{{.Names}}|{{.Status}}' | grep -Ei 'redis' | head -n 1 || true)
-                else
-                  RUNNING=
-                  STOPPED=
-                fi
-                if [ -n "$RUNNING" ]; then
-                  printf 'AIOPS_DEP_STATUS=READY\\n'
-                  printf 'AIOPS_DEP_SOURCE=docker\\n'
-                  printf 'AIOPS_DEP_VERSION=%%s\\n' "$(printf '%%s' "$RUNNING" | cut -d'|' -f1)"
-                  printf 'AIOPS_DEP_MESSAGE=Redis container is running on the target host.\\n'
-                elif ss -lnt 2>/dev/null | grep -q ":%s "; then
-                  printf 'AIOPS_DEP_STATUS=READY\\n'
-                  printf 'AIOPS_DEP_SOURCE=port\\n'
-                  printf 'AIOPS_DEP_MESSAGE=Target host is listening on the expected Redis port.\\n'
-                elif systemctl is-active redis >/dev/null 2>&1 || systemctl is-active redis-server >/dev/null 2>&1; then
-                  printf 'AIOPS_DEP_STATUS=READY\\n'
-                  printf 'AIOPS_DEP_SOURCE=systemd\\n'
-                  printf 'AIOPS_DEP_MESSAGE=Redis service is active on the target host.\\n'
-                elif [ -n "$STOPPED" ] || command -v redis-server >/dev/null 2>&1 || command -v redis-cli >/dev/null 2>&1; then
-                  printf 'AIOPS_DEP_STATUS=FOUND_INACTIVE\\n'
-                  printf 'AIOPS_DEP_SOURCE=host\\n'
-                  printf 'AIOPS_DEP_MESSAGE=Redis runtime exists but does not appear ready.\\n'
-                else
-                  printf 'AIOPS_DEP_STATUS=NOT_FOUND\\n'
-                  printf 'AIOPS_DEP_SOURCE=host\\n'
-                  printf 'AIOPS_DEP_MESSAGE=Redis runtime was not detected on the target host.\\n'
-                fi
-                """.formatted(port, port);
     }
 
     private Map<String, String> parseKeyValues(String stdout) {

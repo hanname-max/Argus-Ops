@@ -2,6 +2,7 @@ package top.codejava.aiops.infrastructure.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import top.codejava.aiops.application.port.WorkflowDependencyDeployPort;
 import top.codejava.aiops.application.port.WorkflowLocalAnalysisPort;
 import top.codejava.aiops.application.port.WorkflowLogAnalysisPort;
 import top.codejava.aiops.application.port.WorkflowScriptGenerationPort;
@@ -17,13 +18,15 @@ public class UseCaseConfiguration {
                                            WorkflowLocalAnalysisPort workflowLocalAnalysisPort,
                                            WorkflowTargetProbePort workflowTargetProbePort,
                                            WorkflowScriptGenerationPort workflowScriptGenerationPort,
-                                           WorkflowLogAnalysisPort workflowLogAnalysisPort) {
+                                           WorkflowLogAnalysisPort workflowLogAnalysisPort,
+                                           WorkflowDependencyDeployPort workflowDependencyDeployPort) {
         return new WorkflowUseCase(
                 workflowSessionPort,
                 workflowLocalAnalysisPort,
                 workflowTargetProbePort,
                 workflowScriptGenerationPort,
-                workflowLogAnalysisPort
+                workflowLogAnalysisPort,
+                workflowDependencyDeployPort
         );
     }
 }

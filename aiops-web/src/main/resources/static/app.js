@@ -21,6 +21,7 @@
     probeWarnings: [],
     dependencyTesting: {},
     dependencyDeploying: {},
+    dependencyTested: {},
     dependencyConfigs: {},
     dependencyIgnored: {},
     needsPortConfirm: false,
@@ -194,6 +195,8 @@
       state.dependencyConfigs[kind][key] = value;
     }
 
+    state.dependencyTested = state.dependencyTested || {};
+    state.dependencyTested[kind] = false;
     state.probeDirty = true;
     persist();
   }
@@ -294,6 +297,14 @@
       return;
     }
 
+    const requirement = (state.localContext?.dependencyRequirements || []).find((r) => r?.kind === kind);
+    const customConfig = state.dependencyConfigs?.[kind] || {};
+    const finalHost = customConfig.host ?? requirement?.host;
+    if (!finalHost || finalHost.trim() === "") {
+      pushLine("[ERROR] 请填写 host；如需探测远程机本机，请明确填写 localhost。", "error");
+      return;
+    }
+
     state.dependencyTesting = state.dependencyTesting || {};
     state.dependencyTesting[kind] = true;
     renderAll();
@@ -320,6 +331,8 @@
       pushLine(`[ERROR] 测试 ${kind} 连接失败: ${error.message}`, "error");
     } finally {
       state.dependencyTesting[kind] = false;
+      state.dependencyTested = state.dependencyTested || {};
+      state.dependencyTested[kind] = true;
       renderAll();
     }
   }
@@ -329,6 +342,24 @@
       pushLine("[ERROR] 请先配置目标服务器地址", "error");
       return;
     }
+    if (!state.workflowId) {
+      pushLine("[ERROR] 请先完成项目分析", "error");
+      return;
+    }
+
+    const requirement = (state.localContext?.dependencyRequirements || []).find((r) => r?.kind === kind);
+    const customConfig = state.dependencyConfigs?.[kind] || {};
+    const finalHost = customConfig.host ?? requirement?.host;
+    if (!finalHost || finalHost.trim() === "") {
+      pushLine("[ERROR] 请填写 host；如需探测远程机本机，请明确填写 localhost。", "error");
+      return;
+    }
+
+    const host = finalHost;
+    const port = customConfig.port ?? requirement?.port ?? getDefaultPort(kind);
+    const databaseName = customConfig.databaseName ?? requirement?.databaseName;
+    const username = customConfig.username ?? getDefaultUsername(kind);
+    const password = customConfig.password ?? "";
 
     state.dependencyDeploying = state.dependencyDeploying || {};
     state.dependencyDeploying[kind] = true;
@@ -336,23 +367,47 @@
 
     try {
       pushLine(`[INFO] 正在部署 ${kind}...`, "info");
+      pushLine(`[INFO] 配置: host=${host}, port=${port}`, "info");
 
-      updateDependencyDecision(kind, "DEPLOY_AUTOMATICALLY");
+      const result = await requestJson("/v1/workflow/deploy-dependency", {
+        method: "POST",
+        body: JSON.stringify({
+          workflowId: state.workflowId,
+          expectedStateVersion: state.stateVersion,
+          credential: {
+            host: state.form.targetHost,
+            sshPort: Number(state.form.sshPort),
+            username: state.form.username,
+            credentialType: "PASSWORD",
+            password: state.form.password,
+            privateKeyPem: "",
+            connectTimeoutMillis: Number(state.form.connectTimeoutMillis)
+          },
+          kind: kind,
+          host: host,
+          port: port,
+          databaseName: databaseName,
+          username: username,
+          password: password
+        })
+      });
 
-      await syncProbeTarget({ force: true });
-
-      const result = findDependencyProbeResult(kind);
-      if (result) {
-        if (result.status === "READY") {
-          pushLine(`[SUCCESS] ${kind} 已就绪: ${result.message}`, "success");
-        } else {
-          pushLine(`[INFO] ${kind} 状态: ${result.status} - ${result.message}`, "info");
-          pushLine(`[INFO] 依赖将在主部署流程中自动配置`, "info");
+      if (result.success) {
+        pushLine(`[SUCCESS] ${kind} 部署成功!`, "success");
+        if (result.stdout) {
+          pushLine(`[INFO] 部署日志: ${result.stdout}`, "info");
+        }
+        pushLine(`[INFO] 正在重新探测依赖状态...`, "info");
+        await syncProbeTarget({ force: true });
+      } else {
+        pushLine(`[ERROR] ${kind} 部署失败: ${result.message}`, "error");
+        if (result.stderr) {
+          pushLine(`[ERROR] 错误详情: ${result.stderr}`, "error");
+        }
+        if (result.stdout) {
+          pushLine(`[INFO] 输出日志: ${result.stdout}`, "info");
         }
       }
-
-      pushLine(`[SUCCESS] ${kind} 部署决策已记录为 DEPLOY_AUTOMATICALLY`, "success");
-      pushLine(`[INFO] 继续主部署流程时将自动创建 ${kind} 实例`, "info");
     } catch (error) {
       pushLine(`[ERROR] 部署 ${kind} 失败: ${error.message}`, "error");
     } finally {
@@ -706,9 +761,10 @@
             const isTesting = state.dependencyTesting?.[requirement.kind] === true;
             const isDeploying = state.dependencyDeploying?.[requirement.kind] === true;
             const isIgnored = state.dependencyIgnored?.[requirement.kind] === true;
+            const hasBeenTested = state.dependencyTested?.[requirement.kind] === true;
 
             const customConfig = state.dependencyConfigs?.[requirement.kind] || {};
-            const host = customConfig.host ?? requirement.host ?? "localhost";
+            const host = customConfig.host ?? requirement.host ?? "";
             const port = customConfig.port ?? requirement.port ?? getDefaultPort(requirement.kind);
             const databaseName = customConfig.databaseName ?? requirement.databaseName;
             const username = customConfig.username ?? getDefaultUsername(requirement.kind);
@@ -743,7 +799,7 @@
                         data-dependency-kind="${escapeAttribute(requirement.kind)}"
                         data-config-key="host"
                         value="${escapeAttribute(host)}"
-                        placeholder="localhost">
+                        placeholder="localhost（表示远程机本机）">
                     </div>
                     <div class="config-table-cell">
                       <label>Port</label>
@@ -836,7 +892,7 @@
                     class="btn btn-sm btn-outline-accent ${isDeploying ? "loading" : ""}"
                     data-action="deploy-dependency"
                     data-dependency-kind="${escapeAttribute(requirement.kind)}"
-                    ${isDeploying ? "disabled" : ""}>
+                    ${!findDependencyProbeResult(requirement.kind) || isDeploying ? "disabled" : ""}>
                     ${isDeploying ? "部署中..." : "部署"}
                   </button>
                 </div>
@@ -1278,7 +1334,8 @@
         },
         defaultApplicationPort: Number(state.form.applicationPort),
         maxAutoIncrementProbeSpan: 10,
-        dependencyDecisions: collectDependencyDecisions()
+        dependencyDecisions: collectDependencyDecisions(),
+        dependencyOverrides: collectDependencyOverrides()
       })
     });
 
@@ -1422,6 +1479,35 @@
         mode: item.mode,
         note: item.note || null
       }));
+  }
+
+  function collectDependencyOverrides() {
+    const requirements = state.localContext?.dependencyRequirements || [];
+    const overrides = [];
+
+    requirements.forEach((requirement) => {
+      if (!requirement?.kind) return;
+
+      const customConfig = state.dependencyConfigs?.[requirement.kind] || {};
+      const hasOverride = customConfig.host != null
+        || customConfig.port != null
+        || customConfig.databaseName != null
+        || customConfig.username != null
+        || customConfig.password != null;
+
+      if (hasOverride) {
+        overrides.push({
+          kind: requirement.kind,
+          host: customConfig.host ?? null,
+          port: customConfig.port ?? null,
+          databaseName: customConfig.databaseName ?? null,
+          username: customConfig.username ?? null,
+          password: customConfig.password ?? null
+        });
+      }
+    });
+
+    return overrides;
   }
 
   function formatConfigSource(item) {
@@ -1598,6 +1684,7 @@
     state.probeWarnings = [];
     state.dependencyTesting = {};
     state.dependencyDeploying = {};
+    state.dependencyTested = {};
     state.dependencyConfigs = {};
     state.dependencyIgnored = {};
     state.needsPortConfirm = false;

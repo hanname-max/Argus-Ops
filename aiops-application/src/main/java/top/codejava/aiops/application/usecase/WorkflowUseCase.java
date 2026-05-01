@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import reactor.core.publisher.Flux;
 import top.codejava.aiops.application.dto.WorkflowModels;
+import top.codejava.aiops.application.port.WorkflowDependencyDeployPort;
 import top.codejava.aiops.application.port.WorkflowLocalAnalysisPort;
 import top.codejava.aiops.application.port.WorkflowLogAnalysisPort;
 import top.codejava.aiops.application.port.WorkflowScriptGenerationPort;
@@ -35,17 +36,20 @@ public class WorkflowUseCase {
     private final WorkflowTargetProbePort workflowTargetProbePort;
     private final WorkflowScriptGenerationPort workflowScriptGenerationPort;
     private final WorkflowLogAnalysisPort workflowLogAnalysisPort;
+    private final WorkflowDependencyDeployPort workflowDependencyDeployPort;
 
     public WorkflowUseCase(WorkflowSessionPort workflowSessionPort,
                            WorkflowLocalAnalysisPort workflowLocalAnalysisPort,
                            WorkflowTargetProbePort workflowTargetProbePort,
                            WorkflowScriptGenerationPort workflowScriptGenerationPort,
-                           WorkflowLogAnalysisPort workflowLogAnalysisPort) {
+                           WorkflowLogAnalysisPort workflowLogAnalysisPort,
+                           WorkflowDependencyDeployPort workflowDependencyDeployPort) {
         this.workflowSessionPort = workflowSessionPort;
         this.workflowLocalAnalysisPort = workflowLocalAnalysisPort;
         this.workflowTargetProbePort = workflowTargetProbePort;
         this.workflowScriptGenerationPort = workflowScriptGenerationPort;
         this.workflowLogAnalysisPort = workflowLogAnalysisPort;
+        this.workflowDependencyDeployPort = workflowDependencyDeployPort;
     }
 
     public WorkflowModels.AnalyzeLocalResponse analyzeLocal(WorkflowModels.AnalyzeLocalRequest request) {
@@ -109,7 +113,8 @@ public class WorkflowUseCase {
                 request.credential(),
                 defaultPort,
                 request.maxAutoIncrementProbeSpan(),
-                request.dependencyDecisions()
+                request.dependencyDecisions(),
+                request.dependencyOverrides()
         );
 
         WorkflowModels.TargetProbePayload payload = workflowTargetProbePort.probe(normalizedRequest, session.localContext());
@@ -384,6 +389,42 @@ public class WorkflowUseCase {
                 remaining,
                 session.transitionComment(),
                 session.updatedAt()
+        );
+    }
+
+    public WorkflowModels.DeployDependencyResponse deployDependency(WorkflowModels.DeployDependencyRequest request) {
+        if (request == null || isBlank(request.workflowId())) {
+            throw new ValidationException("workflowId is required");
+        }
+        if (request.kind() == null) {
+            throw new ValidationException("dependency kind is required");
+        }
+        if (request.credential() == null || isBlank(request.credential().host()) || isBlank(request.credential().username())) {
+            throw new ValidationException("credential.host and credential.username are required");
+        }
+
+        WorkflowModels.WorkflowSession session = requiredSession(request.workflowId());
+        assertVersion(session, request.expectedStateVersion());
+
+        WorkflowDependencyDeployPort.DependencyDeployPayload payload = workflowDependencyDeployPort.deploy(request);
+
+        List<WorkflowModels.WorkflowWarning> warnings = new ArrayList<>();
+        if (!payload.success()) {
+            warnings.add(new WorkflowModels.WorkflowWarning(
+                    "DEPLOYMENT_FAILED",
+                    WorkflowModels.Severity.HIGH,
+                    payload.message(),
+                    null
+            ));
+        }
+
+        return new WorkflowModels.DeployDependencyResponse(
+                snapshot(session),
+                payload.success(),
+                payload.message(),
+                payload.stdout(),
+                payload.stderr(),
+                warnings
         );
     }
 

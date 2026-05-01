@@ -16,6 +16,7 @@ public class ProbeContext {
     private final int timeoutMillis;
     private final List<WorkflowModels.DependencyRequirement> dependencyRequirements;
     private final Map<WorkflowModels.DependencyKind, WorkflowModels.DependencyDecision> dependencyDecisionMap = new LinkedHashMap<>();
+    private final Map<WorkflowModels.DependencyKind, WorkflowModels.DependencyOverride> dependencyOverrideMap = new LinkedHashMap<>();
 
     private final Map<String, String> profileValues = new LinkedHashMap<>();
     private final List<Integer> triedPorts = new ArrayList<>();
@@ -39,14 +40,58 @@ public class ProbeContext {
                 ? 1500
                 : Math.max(500, request.credential().connectTimeoutMillis());
         this.recommendedPort = this.requestedPort;
-        this.dependencyRequirements = localContext == null || localContext.dependencyRequirements() == null
-                ? List.of()
-                : List.copyOf(localContext.dependencyRequirements());
+
+        if (request.dependencyOverrides() != null) {
+            request.dependencyOverrides().stream()
+                    .filter(override -> override != null && override.kind() != null)
+                    .forEach(override -> dependencyOverrideMap.put(override.kind(), override));
+        }
+
+        this.dependencyRequirements = buildDependencyRequirements(localContext, dependencyOverrideMap);
+
         if (request.dependencyDecisions() != null) {
             request.dependencyDecisions().stream()
                     .filter(decision -> decision != null && decision.kind() != null && decision.mode() != null)
                     .forEach(decision -> dependencyDecisionMap.put(decision.kind(), decision));
         }
+    }
+
+    private List<WorkflowModels.DependencyRequirement> buildDependencyRequirements(
+            WorkflowModels.LocalProjectContext localContext,
+            Map<WorkflowModels.DependencyKind, WorkflowModels.DependencyOverride> overrides) {
+        List<WorkflowModels.DependencyRequirement> original = localContext == null || localContext.dependencyRequirements() == null
+                ? List.of()
+                : localContext.dependencyRequirements();
+
+        if (overrides.isEmpty()) {
+            return List.copyOf(original);
+        }
+
+        List<WorkflowModels.DependencyRequirement> result = new ArrayList<>();
+        for (WorkflowModels.DependencyRequirement req : original) {
+            if (req == null || req.kind() == null) {
+                continue;
+            }
+            WorkflowModels.DependencyOverride override = overrides.get(req.kind());
+            if (override != null) {
+                result.add(new WorkflowModels.DependencyRequirement(
+                        req.kind(),
+                        req.displayName(),
+                        req.required(),
+                        override.host() != null && !override.host().isBlank() ? override.host() : req.host(),
+                        override.port() != null ? override.port() : req.port(),
+                        override.databaseName() != null && !override.databaseName().isBlank() ? override.databaseName() : req.databaseName(),
+                        req.sourceKey(),
+                        req.sourceModule(),
+                        req.sourceFile(),
+                        req.sourceProfile(),
+                        req.operatorHint()
+                ));
+            } else {
+                result.add(req);
+            }
+        }
+        return List.copyOf(result);
     }
 
     public WorkflowModels.ProbeTargetRequest request() {
@@ -91,6 +136,10 @@ public class ProbeContext {
 
     public Map<WorkflowModels.DependencyKind, WorkflowModels.DependencyDecision> dependencyDecisionMap() {
         return dependencyDecisionMap;
+    }
+
+    public WorkflowModels.DependencyOverride dependencyOverride(WorkflowModels.DependencyKind kind) {
+        return dependencyOverrideMap.get(kind);
     }
 
     public List<WorkflowModels.DependencyProbeResult> dependencyProbeResults() {

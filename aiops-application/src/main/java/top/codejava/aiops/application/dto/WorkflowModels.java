@@ -27,13 +27,24 @@ public final class WorkflowModels {
     ) {
     }
 
+    public record DependencyOverride(
+            DependencyKind kind,
+            String host,
+            Integer port,
+            String databaseName,
+            String username,
+            String password
+    ) {
+    }
+
     public record ProbeTargetRequest(
             String workflowId,
             Long expectedStateVersion,
             TargetCredential credential,
             Integer defaultApplicationPort,
             Integer maxAutoIncrementProbeSpan,
-            List<DependencyDecision> dependencyDecisions
+            List<DependencyDecision> dependencyDecisions,
+            List<DependencyOverride> dependencyOverrides
     ) {
     }
 
@@ -445,5 +456,28 @@ public final class WorkflowModels {
         DEPLOY_AUTOMATICALLY,
         MANUAL_PREPARE,
         CONTINUE_ANYWAY
+    }
+
+    public record DeployDependencyRequest(
+            String workflowId,
+            Long expectedStateVersion,
+            TargetCredential credential,
+            DependencyKind kind,
+            String host,
+            Integer port,
+            String databaseName,
+            String username,
+            String password
+    ) {
+    }
+
+    public record DeployDependencyResponse(
+            WorkflowStateSnapshot state,
+            boolean success,
+            String message,
+            String stdout,
+            String stderr,
+            List<WorkflowWarning> warnings
+    ) {
     }
 }
