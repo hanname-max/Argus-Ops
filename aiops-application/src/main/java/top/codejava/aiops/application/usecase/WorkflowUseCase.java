@@ -86,6 +86,7 @@ public class WorkflowUseCase {
                 null,
                 List.of(),
                 List.of(),
+                List.of(),
                 null
         ));
 
@@ -118,6 +119,10 @@ public class WorkflowUseCase {
         );
 
         WorkflowModels.TargetProbePayload payload = workflowTargetProbePort.probe(normalizedRequest, session.localContext());
+        List<WorkflowModels.DependencyOverride> mergedOverrides = mergeDependencyOverrides(
+                session.dependencyOverrides(),
+                request.dependencyOverrides()
+        );
         WorkflowModels.WorkflowSession saved = workflowSessionPort.save(new WorkflowModels.WorkflowSession(
                 session.workflowId(),
                 nextVersion(session),
@@ -131,6 +136,7 @@ public class WorkflowUseCase {
                 payload.portProbeDecision(),
                 payload.dependencyProbeResults(),
                 payload.dependencyDecisions(),
+                mergedOverrides,
                 null
         ));
 
@@ -168,6 +174,7 @@ public class WorkflowUseCase {
                 session.portProbeDecision(),
                 session.dependencyProbeResults(),
                 session.dependencyDecisions(),
+                session.dependencyOverrides(),
                 metadata
         );
         WorkflowModels.WorkflowStateSnapshot runningSnapshot = snapshot(runningSession);
@@ -180,6 +187,7 @@ public class WorkflowUseCase {
                 session.portProbeDecision(),
                 session.dependencyProbeResults(),
                 session.dependencyDecisions(),
+                session.dependencyOverrides(),
                 metadata
         );
 
@@ -222,6 +230,7 @@ public class WorkflowUseCase {
                     session.portProbeDecision(),
                     session.dependencyProbeResults(),
                     session.dependencyDecisions(),
+                    session.dependencyOverrides(),
                     metadata
             ));
             return Flux.just(new WorkflowModels.ScriptStreamEvent(
@@ -252,6 +261,7 @@ public class WorkflowUseCase {
                             session.portProbeDecision(),
                             session.dependencyProbeResults(),
                             session.dependencyDecisions(),
+                            session.dependencyOverrides(),
                             metadata
                     ));
                     return Flux.just(new WorkflowModels.ScriptStreamEvent(
@@ -297,6 +307,7 @@ public class WorkflowUseCase {
                 session.portProbeDecision(),
                 session.dependencyProbeResults(),
                 session.dependencyDecisions(),
+                session.dependencyOverrides(),
                 session.scriptMetadata()
         ));
 
@@ -403,13 +414,71 @@ public class WorkflowUseCase {
             throw new ValidationException("credential.host and credential.username are required");
         }
 
+        if (request.host() != null && !request.host().isBlank() && !isLocalhost(request.host())) {
+            throw new ValidationException(
+                    "Dependency deployment only allowed to target machine localhost. " +
+                    "Dependency host must be 'localhost', '127.0.0.1', or '::1', but got: " + request.host() + ". " +
+                    "Use REUSE_EXISTING decision mode for external dependencies instead."
+            );
+        }
+
         WorkflowModels.WorkflowSession session = requiredSession(request.workflowId());
         assertVersion(session, request.expectedStateVersion());
 
         WorkflowDependencyDeployPort.DependencyDeployPayload payload = workflowDependencyDeployPort.deploy(request);
 
         List<WorkflowModels.WorkflowWarning> warnings = new ArrayList<>();
-        if (!payload.success()) {
+        WorkflowModels.WorkflowSession updatedSession = session;
+
+        if (payload.success()) {
+            String normalizedHost = "localhost";
+            String effectivePassword = normalizeDeployPassword(request.kind(), request.password());
+            String effectiveUsername = normalizeDeployUsername(request.kind(), request.username());
+            WorkflowModels.DependencyOverride newOverride = new WorkflowModels.DependencyOverride(
+                    request.kind(),
+                    normalizedHost,
+                    request.port(),
+                    request.databaseName(),
+                    effectiveUsername,
+                    effectivePassword
+            );
+
+            List<WorkflowModels.DependencyOverride> mergedOverrides = mergeDependencyOverrides(
+                    session.dependencyOverrides(),
+                    List.of(newOverride)
+            );
+
+            List<WorkflowModels.DependencyDecision> updatedDecisions = updateDependencyDecision(
+                    session.dependencyDecisions(),
+                    request.kind(),
+                    WorkflowModels.DependencyDecisionMode.REUSE_EXISTING,
+                    "Deployed successfully via explicit dependency deploy request"
+            );
+
+            updatedSession = workflowSessionPort.save(new WorkflowModels.WorkflowSession(
+                    session.workflowId(),
+                    nextVersion(session),
+                    session.currentStage(),
+                    session.stageStatus(),
+                    session.completedStages(),
+                    "Dependency " + request.kind() + " deployed successfully and marked for reuse.",
+                    Instant.now(),
+                    session.localContext(),
+                    session.targetProfile(),
+                    session.portProbeDecision(),
+                    session.dependencyProbeResults(),
+                    updatedDecisions,
+                    mergedOverrides,
+                    session.scriptMetadata()
+            ));
+
+            warnings.add(new WorkflowModels.WorkflowWarning(
+                    "DEPENDENCY_DEPLOYED_AND_REUSE_MARKED",
+                    WorkflowModels.Severity.INFO,
+                    request.kind() + " deployed successfully. Configuration saved to workflow session. Subsequent deployments will reuse this instance.",
+                    "Continue to script generation step. The dependency will not be re-deployed automatically."
+            ));
+        } else {
             warnings.add(new WorkflowModels.WorkflowWarning(
                     "DEPLOYMENT_FAILED",
                     WorkflowModels.Severity.HIGH,
@@ -419,13 +488,94 @@ public class WorkflowUseCase {
         }
 
         return new WorkflowModels.DeployDependencyResponse(
-                snapshot(session),
+                snapshot(updatedSession),
                 payload.success(),
                 payload.message(),
                 payload.stdout(),
                 payload.stderr(),
                 warnings
         );
+    }
+
+    private boolean isLocalhost(String host) {
+        if (host == null || host.isBlank()) {
+            return false;
+        }
+        String normalized = host.trim().toLowerCase(java.util.Locale.ROOT);
+        return "localhost".equals(normalized) || "127.0.0.1".equals(normalized) || "::1".equals(normalized);
+    }
+
+    private String normalizeDeployPassword(WorkflowModels.DependencyKind kind, String password) {
+        if (kind == WorkflowModels.DependencyKind.MYSQL) {
+            if (password == null || password.isBlank()) {
+                return "123456";
+            }
+            return password;
+        } else if (kind == WorkflowModels.DependencyKind.REDIS) {
+            if (password == null) {
+                return "";
+            }
+            return password;
+        }
+        return password;
+    }
+
+    private String normalizeDeployUsername(WorkflowModels.DependencyKind kind, String username) {
+        if (kind == WorkflowModels.DependencyKind.MYSQL) {
+            if (username == null || username.isBlank()) {
+                return "root";
+            }
+            return username;
+        }
+        return username;
+    }
+
+    private List<WorkflowModels.DependencyOverride> mergeDependencyOverrides(
+            List<WorkflowModels.DependencyOverride> existing,
+            List<WorkflowModels.DependencyOverride> newOverrides) {
+        if (newOverrides == null || newOverrides.isEmpty()) {
+            return existing == null ? List.of() : List.copyOf(existing);
+        }
+
+        java.util.Map<WorkflowModels.DependencyKind, WorkflowModels.DependencyOverride> map = new java.util.LinkedHashMap<>();
+        if (existing != null) {
+            for (WorkflowModels.DependencyOverride override : existing) {
+                if (override != null && override.kind() != null) {
+                    map.put(override.kind(), override);
+                }
+            }
+        }
+        for (WorkflowModels.DependencyOverride override : newOverrides) {
+            if (override != null && override.kind() != null) {
+                map.put(override.kind(), override);
+            }
+        }
+        return List.copyOf(map.values());
+    }
+
+    private List<WorkflowModels.DependencyDecision> updateDependencyDecision(
+            List<WorkflowModels.DependencyDecision> existing,
+            WorkflowModels.DependencyKind kind,
+            WorkflowModels.DependencyDecisionMode mode,
+            String note) {
+        if (existing == null) {
+            existing = List.of();
+        }
+
+        List<WorkflowModels.DependencyDecision> result = new ArrayList<>();
+        boolean found = false;
+        for (WorkflowModels.DependencyDecision decision : existing) {
+            if (decision != null && decision.kind() == kind) {
+                result.add(new WorkflowModels.DependencyDecision(kind, mode, note));
+                found = true;
+            } else if (decision != null) {
+                result.add(decision);
+            }
+        }
+        if (!found) {
+            result.add(new WorkflowModels.DependencyDecision(kind, mode, note));
+        }
+        return List.copyOf(result);
     }
 
     private boolean isBlank(String value) {

@@ -1,0 +1,33 @@
+ 忽略依赖 现在基本是伪功能，只改了前端状态和日志，既不会传给后端，也不会解除 Phase 3 的阻塞；
+     hasPendingDependencyDecision() 仍然会把流程卡住。aiops-web/src/main/resources/static/app.js:241 aiops-web/src/main/
+     resources/static/app.js:1500 aiops-web/src/main/resources/static/app.js:1540
+     提示词：只修复第二步依赖卡片里的“忽略”行为，不做大改。要求：ignored 的 dependency 不再阻塞进入 Phase 3；优先采用最
+     小方案，把 ignore 映射为已有的 CONTINUE_ANYWAY decision，接入现有 collectDependencyDecisions 流程。不要改探测协议，
+     不要新增复杂后端接口。
+  2. 测试连接 结束后无论成功失败，dependencyTested[kind] 都会在 finally 里被置成 true，于是 Deploy 按钮会被放开，这个状
+     态语义不干净。aiops-web/src/main/resources/static/app.js:294 aiops-web/src/main/resources/static/app.js:327 aiops-
+     web/src/main/resources/static/app.js:751 aiops-web/src/main/resources/static/app.js:882
+     提示词：只收敛依赖 Deploy 按钮的启用条件。现在测试失败/异常后也会被视为“已测试”。改成只有拿到有效 dependency probe
+     result 时才标记 tested=true；失败或异常保持 false，并在 UI 上给出明确提示。不要改后端接口。
+  3. MySQL 依赖识别条件过宽，只要出现通用的 datasource host/port/db 键，就可能被判成 MySQL，即使真实数据库未必是 MySQL。
+     aiops-infrastructure/src/main/java/top/codejava/aiops/infrastructure/workflow/
+     ProjectDependencyRequirementAnalyzer.java:156 aiops-infrastructure/src/main/java/top/codejava/aiops/infrastructure/
+     workflow/ProjectDependencyRequirementAnalyzer.java:87
+     提示词：只收紧 MySQL dependency 的识别条件，不扩展新数据库类型。要求：仅当 driver/url 等证据明确指向 mysql/mariadb
+     时才生成 MYSQL requirement；不要因为泛化的 datasource host/port/database 键就自动认成 MySQL。补一个非 MySQL
+     datasource 的回归测试。
+  4. 依赖决策下拉框的文案逻辑不优雅：先创建一套文案，后面又用 if (options.length === 5) 无条件覆盖成英文，属于明显的死逻
+     辑/漂移逻辑。aiops-web/src/main/resources/static/app.js:1576 aiops-web/src/main/resources/static/app.js:1583
+     提示词：只清理 dependency decision 下拉框文案逻辑。删除无条件的英文覆盖分支，保留一套确定来源的文案即可。不要引入完
+     整 i18n 系统，不改业务行为。
+  5. MySQL/Redis 的依赖部署脚本在两个类里各维护了一份，内容几乎重复，后续很容易一边改了另一边漏改。aiops-infrastructure/
+     src/main/java/top/codejava/aiops/infrastructure/workflow/probe/SshWorkflowDependencyDeployAdapter.java:58 aiops-
+     infrastructure/src/main/java/top/codejava/aiops/infrastructure/deploy/script/ProjectDeploymentRuleEngine.java:841
+     提示词：做一个小范围去重重构：抽取 MySQL/Redis dependency provision script builder，让
+     SshWorkflowDependencyDeployAdapter 和 ProjectDeploymentRuleEngine 复用同一份脚本生成逻辑。不要改变脚本行为、镜像版
+     本和参数语义，补一个断言两处输出一致的测试。
+  6. parseJdbcEndpoint() 是纯手写切字符串，边界比较脆，像 IPv6、变体 JDBC URL、异常输入都容易解析歪，但这个点本身很适合
+     单独收口。aiops-infrastructure/src/main/java/top/codejava/aiops/infrastructure/workflow/
+     ProjectDependencyRequirementAnalyzer.java:220
+     提示词：只重构 ProjectDependencyRequirementAnalyzer.parseJdbcEndpoint()，别动外部流程。目标：支持常见 jdbc:mysql
+     URL 变体、query 参数和 IPv6 主机；解析失败时返回空字段而不是错误切片结果。不要引入大库，补 4-6 个方法级单测。

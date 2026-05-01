@@ -1,0 +1,19 @@
+{
+  "workflowId": "c9150a78-dbe5-4fcd-9f2f-ac28c6a2c111",
+  "expectedStateVersion": 2,
+  "credential": {
+    "host": "39.106.139.246",
+    "sshPort": 22,
+    "username": "root",
+    "credentialType": "PASSWORD",
+    "password": "qqww235689@",
+    "privateKeyPem": "",
+    "connectTimeoutMillis": 5000
+  },
+  "kind": "MYSQL",
+  "host": "localhost",
+  "port": 3316,
+  "databaseName": "codex_probe_db",
+  "username": "root",
+  "password": ""
+}

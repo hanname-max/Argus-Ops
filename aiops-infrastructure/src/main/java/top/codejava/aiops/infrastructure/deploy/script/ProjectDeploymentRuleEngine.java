@@ -43,7 +43,8 @@ public class ProjectDeploymentRuleEngine {
                     normalizePort(recommendedPort),
                     request.localContext(),
                     request.dependencyProbeResults(),
-                    request.dependencyDecisions()
+                    request.dependencyDecisions(),
+                    request.dependencyOverrides()
             ));
         }
         return fallbackForWorkflow(request);
@@ -577,25 +578,38 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private void applyDependencyEnvironmentOverrides(DeploymentDetectionContext context, Map<String, String> environment) {
-        if (context.localContext() == null || context.localContext().dependencyRequirements() == null) {
+        List<WorkflowModels.DependencyRequirement> effectiveRequirements = context.effectiveDependencyRequirements();
+        if (effectiveRequirements == null || effectiveRequirements.isEmpty()) {
             return;
         }
-        for (WorkflowModels.DependencyRequirement requirement : context.localContext().dependencyRequirements()) {
+        for (WorkflowModels.DependencyRequirement requirement : effectiveRequirements) {
             if (requirement == null || requirement.kind() == null) {
                 continue;
             }
 
             WorkflowModels.DependencyDecision decision = dependencyDecisionFor(context, requirement.kind());
+            WorkflowModels.DependencyOverride override = context.dependencyOverride(requirement.kind());
+
             boolean autoProvision = decision != null
                     && decision.mode() == WorkflowModels.DependencyDecisionMode.DEPLOY_AUTOMATICALLY;
-            boolean routeThroughHostGateway = isLocalDependencyHost(requirement.host()) || autoProvision;
+            boolean reuseExisting = decision != null
+                    && decision.mode() == WorkflowModels.DependencyDecisionMode.REUSE_EXISTING;
+
+            boolean effectiveHostIsLocal = isLocalDependencyHost(requirement.host());
+            boolean overrideHostIsLocal = override != null && override.host() != null
+                    && isLocalDependencyHost(override.host());
+
+            boolean routeThroughHostGateway = effectiveHostIsLocal
+                    || autoProvision
+                    || (reuseExisting && overrideHostIsLocal);
+
             if (!routeThroughHostGateway) {
                 continue;
             }
 
             switch (requirement.kind()) {
-                case MYSQL -> applyMysqlEnvironmentOverrides(context, environment, requirement, autoProvision);
-                case REDIS -> applyRedisEnvironmentOverrides(context, environment, requirement, autoProvision);
+                case MYSQL -> applyMysqlEnvironmentOverrides(context, environment, requirement, autoProvision, routeThroughHostGateway);
+                case REDIS -> applyRedisEnvironmentOverrides(context, environment, requirement, autoProvision, routeThroughHostGateway);
             }
         }
     }
@@ -603,9 +617,12 @@ public class ProjectDeploymentRuleEngine {
     private void applyMysqlEnvironmentOverrides(DeploymentDetectionContext context,
                                                 Map<String, String> environment,
                                                 WorkflowModels.DependencyRequirement requirement,
-                                                boolean autoProvision) {
+                                                boolean autoProvision,
+                                                boolean routeThroughHostGateway) {
         int port = requirement.port() == null ? 3306 : requirement.port();
-        String host = "host.docker.internal";
+        String host = routeThroughHostGateway
+                ? "host.docker.internal"
+                : (requirement.host() != null ? requirement.host() : "localhost");
         String databaseName = resolvedMysqlDatabaseName(requirement, autoProvision);
         String username = resolvedMysqlUsername(context, autoProvision);
         String password = resolvedMysqlPassword(context, autoProvision);
@@ -634,9 +651,12 @@ public class ProjectDeploymentRuleEngine {
     private void applyRedisEnvironmentOverrides(DeploymentDetectionContext context,
                                                 Map<String, String> environment,
                                                 WorkflowModels.DependencyRequirement requirement,
-                                                boolean autoProvision) {
+                                                boolean autoProvision,
+                                                boolean routeThroughHostGateway) {
         int port = requirement.port() == null ? 6379 : requirement.port();
-        String host = "host.docker.internal";
+        String host = routeThroughHostGateway
+                ? "host.docker.internal"
+                : (requirement.host() != null ? requirement.host() : "localhost");
         String password = resolvedRedisPassword(context, autoProvision);
         String redisUrl = resolvedRedisUrl(context, host, port, password);
 
@@ -658,6 +678,10 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private String resolvedMysqlUsername(DeploymentDetectionContext context, boolean autoProvision) {
+        WorkflowModels.DependencyOverride override = context.dependencyOverride(WorkflowModels.DependencyKind.MYSQL);
+        if (override != null && override.username() != null && !override.username().isBlank()) {
+            return override.username();
+        }
         String current = runtimeConfigValue(context,
                 "sky.datasource.username",
                 "spring.datasource.username",
@@ -670,6 +694,10 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private String resolvedMysqlPassword(DeploymentDetectionContext context, boolean autoProvision) {
+        WorkflowModels.DependencyOverride override = context.dependencyOverride(WorkflowModels.DependencyKind.MYSQL);
+        if (override != null && override.password() != null) {
+            return override.password();
+        }
         String current = runtimeConfigValue(context,
                 "sky.datasource.password",
                 "spring.datasource.password",
@@ -723,6 +751,10 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private String resolvedRedisPassword(DeploymentDetectionContext context, boolean autoProvision) {
+        WorkflowModels.DependencyOverride override = context.dependencyOverride(WorkflowModels.DependencyKind.REDIS);
+        if (override != null && override.password() != null) {
+            return override.password();
+        }
         String current = runtimeConfigValue(context,
                 "sky.redis.password",
                 "spring.redis.password",
@@ -800,13 +832,13 @@ public class ProjectDeploymentRuleEngine {
     }
 
     private String buildDependencySetupBlock(DeploymentDetectionContext context) {
-        if (context.localContext() == null || context.localContext().dependencyRequirements() == null
-                || context.localContext().dependencyRequirements().isEmpty()) {
+        List<WorkflowModels.DependencyRequirement> effectiveRequirements = context.effectiveDependencyRequirements();
+        if (effectiveRequirements == null || effectiveRequirements.isEmpty()) {
             return "";
         }
 
         List<String> lines = new ArrayList<>();
-        for (WorkflowModels.DependencyRequirement requirement : context.localContext().dependencyRequirements()) {
+        for (WorkflowModels.DependencyRequirement requirement : effectiveRequirements) {
             WorkflowModels.DependencyDecision decision = dependencyDecisionFor(context, requirement.kind());
             WorkflowModels.DependencyProbeResult probeResult = dependencyProbeResultFor(context, requirement.kind());
             if (decision == null || decision.mode() == null) {

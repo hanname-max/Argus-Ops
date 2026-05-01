@@ -1,0 +1,10 @@
+{
+  "workflowId": null,
+  "expectedStateVersion": null,
+  "projectPath": "D:\\codenew\\GM\\Argus-Ops",
+  "operator": "Codex",
+  "includeDependencyGraph": true,
+  "simulateCompile": true,
+  "confirmedConfigChoice": null,
+  "configOverrides": []
+}

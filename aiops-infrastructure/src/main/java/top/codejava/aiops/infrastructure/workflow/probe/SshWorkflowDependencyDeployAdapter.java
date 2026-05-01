@@ -11,6 +11,7 @@ import java.util.function.Consumer;
 public class SshWorkflowDependencyDeployAdapter implements WorkflowDependencyDeployPort {
 
     private static final int DEPLOY_COMMAND_TIMEOUT_MILLIS = 180_000;
+    private static final int DEFAULT_CONNECT_TIMEOUT_MILLIS = 8_000;
 
     private final SshCommandExecutorAdapter sshCommandExecutorAdapter;
 
@@ -28,9 +29,22 @@ public class SshWorkflowDependencyDeployAdapter implements WorkflowDependencyDep
 
         Consumer<SshCommandExecutorAdapter.LogFrame> logSink = ignored -> {};
 
-        SshCommandExecutorAdapter.SshExecutionResult result = sshCommandExecutorAdapter.execute(
-                credential,
+        SshCommandExecutorAdapter.SshExecutionRequest executionRequest = new SshCommandExecutorAdapter.SshExecutionRequest(
+                credential.host(),
+                normalizePort(credential.sshPort()),
+                credential.username(),
+                credential.password(),
+                credential.privateKeyPem(),
                 script,
+                credential.connectTimeoutMillis() == null ? DEFAULT_CONNECT_TIMEOUT_MILLIS : credential.connectTimeoutMillis(),
+                DEPLOY_COMMAND_TIMEOUT_MILLIS,
+                false,
+                null,
+                false
+        );
+
+        SshCommandExecutorAdapter.SshExecutionResult result = sshCommandExecutorAdapter.execute(
+                executionRequest,
                 logSink
         );
 
@@ -42,6 +56,10 @@ public class SshWorkflowDependencyDeployAdapter implements WorkflowDependencyDep
         );
     }
 
+    private int normalizePort(Integer port) {
+        return port == null || port <= 0 ? 22 : port;
+    }
+
     private String generateDeployScript(WorkflowModels.DeployDependencyRequest request) {
         return switch (request.kind()) {
             case MYSQL -> generateMysqlScript(request);
@@ -51,7 +69,7 @@ public class SshWorkflowDependencyDeployAdapter implements WorkflowDependencyDep
 
     private String generateMysqlScript(WorkflowModels.DeployDependencyRequest request) {
         String username = request.username() == null || request.username().isBlank() ? "root" : request.username();
-        String password = request.password() == null ? "123456" : request.password();
+        String password = request.password() == null || request.password().isBlank() ? "123456" : request.password();
         String databaseName = request.databaseName() == null || request.databaseName().isBlank() ? "app" : request.databaseName();
         int hostPort = request.port() == null ? 3306 : request.port();
 

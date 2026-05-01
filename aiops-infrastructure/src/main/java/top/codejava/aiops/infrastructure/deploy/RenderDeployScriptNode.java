@@ -47,6 +47,7 @@ public class RenderDeployScriptNode implements DeployNode {
                     session.portProbeDecision(),
                     session.dependencyProbeResults(),
                     session.dependencyDecisions(),
+                    session.dependencyOverrides(),
                     metadata
             );
             DeploymentPlan plan = projectDeploymentRuleEngine.resolveForWorkflow(generationRequest);

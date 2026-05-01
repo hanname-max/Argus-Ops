@@ -1,0 +1,17 @@
+{
+  "workflowId": "c9150a78-dbe5-4fcd-9f2f-ac28c6a2c111",
+  "expectedStateVersion": 1,
+  "credential": {
+    "host": "39.106.139.246",
+    "sshPort": 22,
+    "username": "root",
+    "credentialType": "PASSWORD",
+    "password": "qqww235689@",
+    "privateKeyPem": "",
+    "connectTimeoutMillis": 5000
+  },
+  "defaultApplicationPort": 8080,
+  "maxAutoIncrementProbeSpan": 10,
+  "dependencyDecisions": [],
+  "dependencyOverrides": []
+}

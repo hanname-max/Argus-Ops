@@ -393,12 +393,28 @@
       });
 
       if (result.success) {
+        state.dependencyConfigs = state.dependencyConfigs || {};
+        state.dependencyConfigs[kind] = {
+          ...(state.dependencyConfigs[kind] || {}),
+          host: "localhost",
+          port: port,
+          databaseName: databaseName ?? null,
+          username: username ?? getDefaultUsername(kind),
+          password: kind === "MYSQL"
+            ? (password && password.trim() !== "" ? password : "123456")
+            : (password ?? "")
+        };
         pushLine(`[SUCCESS] ${kind} 部署成功!`, "success");
         if (result.stdout) {
           pushLine(`[INFO] 部署日志: ${result.stdout}`, "info");
         }
-        pushLine(`[INFO] 正在重新探测依赖状态...`, "info");
-        await syncProbeTarget({ force: true });
+        pushLine(`[INFO] 部署成功，正在发起重新探测请求`, "info");
+        try {
+          await syncProbeTarget({ force: true });
+          pushLine(`[INFO] 重新探测完成`, "info");
+        } catch (probeError) {
+          pushLine(`[ERROR] 部署成功，但重新探测失败: ${probeError.message}`, "error");
+        }
       } else {
         pushLine(`[ERROR] ${kind} 部署失败: ${result.message}`, "error");
         if (result.stderr) {

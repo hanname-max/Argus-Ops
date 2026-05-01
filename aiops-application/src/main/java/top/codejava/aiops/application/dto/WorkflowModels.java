@@ -112,6 +112,7 @@ public final class WorkflowModels {
             PortProbeDecision portProbeDecision,
             List<DependencyProbeResult> dependencyProbeResults,
             List<DependencyDecision> dependencyDecisions,
+            List<DependencyOverride> dependencyOverrides,
             ScriptGenerationMetadata scriptMetadata
     ) {
     }
@@ -317,6 +318,7 @@ public final class WorkflowModels {
             PortProbeDecision portProbeDecision,
             List<DependencyProbeResult> dependencyProbeResults,
             List<DependencyDecision> dependencyDecisions,
+            List<DependencyOverride> dependencyOverrides,
             ScriptGenerationMetadata metadata
     ) {
     }
