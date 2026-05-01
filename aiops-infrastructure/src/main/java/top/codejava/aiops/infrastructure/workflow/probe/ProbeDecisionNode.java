@@ -19,7 +19,7 @@ public class ProbeDecisionNode implements ProbeNode {
                 && context.recommendedPort() != null
                 && !context.recommendedPort().equals(context.requestedPort())) {
             WorkflowModels.BilingualText warningMessage = new WorkflowModels.BilingualText(
-                    "Requested port " + context.requestedPort() + " is occupied. Use recommended port " + context.recommendedPort() + ".",
+                    "请求的端口 " + context.requestedPort() + " 已被占用。请使用推荐端口 " + context.recommendedPort() + "。",
                     "Requested port " + context.requestedPort() + " is occupied. Use recommended port " + context.recommendedPort() + "."
             );
             context.warningMessage(warningMessage);
@@ -31,7 +31,7 @@ public class ProbeDecisionNode implements ProbeNode {
             ));
         } else if (context.requestedPortOccupied()) {
             WorkflowModels.BilingualText warningMessage = new WorkflowModels.BilingualText(
-                    "Requested port is occupied and no clearly available candidate was found in the probe window.",
+                    "请求的端口已被占用，且在探测范围内未找到明确可用的候选端口。",
                     "Requested port is occupied and no clearly available candidate was found in the probe window."
             );
             context.warningMessage(warningMessage);
