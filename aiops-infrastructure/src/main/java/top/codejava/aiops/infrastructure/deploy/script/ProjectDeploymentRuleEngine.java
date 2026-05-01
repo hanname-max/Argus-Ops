@@ -146,7 +146,7 @@ public class ProjectDeploymentRuleEngine {
                 "ENV APP_PORT=8080",
                 "ENV JAVA_OPTS=",
                 "EXPOSE 8080",
-                "ENTRYPOINT [\"sh\",\"-c\",\"java $JAVA_OPTS -Dserver.port=${APP_PORT:-8080} ${SPRING_PROFILES_ACTIVE:+-Dspring.profiles.active=${SPRING_PROFILES_ACTIVE}} -jar /app/app.jar\"]"
+                "ENTRYPOINT [\"sh\",\"-c\",\"exec java $JAVA_OPTS -Dserver.port=${APP_PORT:-8080} ${SPRING_PROFILES_ACTIVE:+-Dspring.profiles.active=${SPRING_PROFILES_ACTIVE}} -jar /app/app.jar\"]"
         );
         String body = javaLifecycleBlock(
                 "java-maven",
@@ -181,7 +181,7 @@ public class ProjectDeploymentRuleEngine {
                 "ENV APP_PORT=8080",
                 "ENV JAVA_OPTS=",
                 "EXPOSE 8080",
-                "ENTRYPOINT [\"sh\",\"-c\",\"java $JAVA_OPTS -Dserver.port=${APP_PORT:-8080} ${SPRING_PROFILES_ACTIVE:+-Dspring.profiles.active=${SPRING_PROFILES_ACTIVE}} -jar /app/app.jar\"]"
+                "ENTRYPOINT [\"sh\",\"-c\",\"exec java $JAVA_OPTS -Dserver.port=${APP_PORT:-8080} ${SPRING_PROFILES_ACTIVE:+-Dspring.profiles.active=${SPRING_PROFILES_ACTIVE}} -jar /app/app.jar\"]"
         );
         String body = javaLifecycleBlock(
                 "java-gradle",
@@ -343,13 +343,13 @@ public class ProjectDeploymentRuleEngine {
                         "    index index.html index.htm;",
                         useSpaConfig ? "    location / { try_files $uri $uri/ /index.html; }" : "    location / { try_files $uri $uri/ =404; }",
                         markers.hasNginxConf()
-                                ? "    location /api/ { proxy_pass http://host.docker.internal:${BACKEND_PORT}/admin/; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }"
-                                : "    location /api/ { proxy_pass http://host.docker.internal:${BACKEND_PORT}/; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }",
+                                ? "    location /api/ { proxy_pass http://host.docker.internal:${BACKEND_PORT}/admin/; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; }"
+                                : "    location /api/ { proxy_pass http://host.docker.internal:${BACKEND_PORT}/; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; }",
                         "    error_page 500 502 503 504 /50x.html;",
                         "}",
                         "EOF",
                         "EXPOSE 80",
-                        "CMD [\"sh\",\"-c\",\"envsubst '$BACKEND_PORT' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'\"]"
+                        "CMD [\"sh\",\"-c\",\"envsubst '$BACKEND_PORT' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -t && exec nginx -g 'daemon off;'\"]"
                 );
         String body = nginxLifecycleBlock(
                 "nginx-static",
@@ -431,9 +431,27 @@ public class ProjectDeploymentRuleEngine {
                 done
                 docker rm -f %s >/dev/null 2>&1 || true
                 docker run -d --restart unless-stopped --add-host=host.docker.internal:host-gateway --name %s %s-p %d:%d %s:latest
-                sleep 4
+                for attempt in $(seq 1 15); do
+                  sleep 2
+                  CONTAINER_STATUS="$(docker inspect --format '{{.State.Status}}' %s 2>/dev/null || echo "exited")"
+                  if [ "$CONTAINER_STATUS" = "restarting" ]; then
+                    echo "[AIOPS] container is in restart loop on attempt $attempt"
+                    docker logs --tail 120 %s || true
+                    exit 1
+                  elif [ "$CONTAINER_STATUS" = "exited" ] || [ "$CONTAINER_STATUS" = "dead" ]; then
+                    echo "[AIOPS] container exited unexpectedly on attempt $attempt (status: $CONTAINER_STATUS)"
+                    docker logs --tail 120 %s || true
+                    exit 1
+                  elif [ "$CONTAINER_STATUS" != "running" ]; then
+                    echo "[AIOPS] container in unexpected state: $CONTAINER_STATUS"
+                    docker logs --tail 120 %s || true
+                    exit 1
+                  fi
+                done
                 docker ps --filter name=%s
-                if ! docker ps --filter name=%s --format '{{.Names}}' | grep -q '^%s$'; then
+                FINAL_STATUS="$(docker inspect --format '{{.State.Status}}' %s 2>/dev/null || echo "exited")"
+                if [ "$FINAL_STATUS" != "running" ]; then
+                  echo "[AIOPS] container is not running (final status: $FINAL_STATUS)"
                   docker logs --tail 120 %s || true
                   exit 1
                 fi
@@ -453,6 +471,9 @@ public class ProjectDeploymentRuleEngine {
                 hostPort,
                 containerPort,
                 imageName,
+                containerName,
+                containerName,
+                containerName,
                 containerName,
                 containerName,
                 containerName,
@@ -492,8 +513,30 @@ public class ProjectDeploymentRuleEngine {
                 BACKEND_PORT="${BACKEND_PORT:-8080}"
                 echo "[AIOPS] resolved backend port=${BACKEND_PORT}"
                 docker run -d --restart unless-stopped --add-host=host.docker.internal:host-gateway --name %s -e BACKEND_PORT=${BACKEND_PORT} -p %d:%d %s:latest
-                sleep 3
+                for attempt in $(seq 1 10); do
+                  sleep 1
+                  CONTAINER_STATUS="$(docker inspect --format '{{.State.Status}}' %s 2>/dev/null || echo "exited")"
+                  if [ "$CONTAINER_STATUS" = "restarting" ]; then
+                    echo "[AIOPS] nginx container is in restart loop on attempt $attempt"
+                    docker logs --tail 80 %s || true
+                    exit 1
+                  elif [ "$CONTAINER_STATUS" = "exited" ] || [ "$CONTAINER_STATUS" = "dead" ]; then
+                    echo "[AIOPS] nginx container exited unexpectedly on attempt $attempt (status: $CONTAINER_STATUS)"
+                    docker logs --tail 80 %s || true
+                    exit 1
+                  elif [ "$CONTAINER_STATUS" != "running" ]; then
+                    echo "[AIOPS] nginx container in unexpected state: $CONTAINER_STATUS"
+                    docker logs --tail 80 %s || true
+                    exit 1
+                  fi
+                done
                 docker ps --filter name=%s
+                FINAL_STATUS="$(docker inspect --format '{{.State.Status}}' %s 2>/dev/null || echo "exited")"
+                if [ "$FINAL_STATUS" != "running" ]; then
+                  echo "[AIOPS] nginx container is not running (final status: $FINAL_STATUS)"
+                  docker logs --tail 80 %s || true
+                  exit 1
+                fi
                 if command -v ss >/dev/null 2>&1; then
                   ss -lnt | grep ':%d' || true
                 fi
@@ -511,6 +554,12 @@ public class ProjectDeploymentRuleEngine {
                 hostPort,
                 containerPort,
                 imageName,
+                containerName,
+                containerName,
+                containerName,
+                containerName,
+                containerName,
+                containerName,
                 containerName,
                 hostPort,
                 containerName
@@ -1000,7 +1049,7 @@ public class ProjectDeploymentRuleEngine {
         lines.addAll(renderedConfig.lines().toList());
         lines.add("EOF");
         lines.add("EXPOSE 80");
-        lines.add("CMD [\"sh\",\"-c\",\"envsubst '$BACKEND_PORT' < /etc/nginx/templates/nginx.conf.template > /etc/nginx/nginx.conf && exec nginx -g 'daemon off;'\"]");
+        lines.add("CMD [\"sh\",\"-c\",\"envsubst '$BACKEND_PORT' < /etc/nginx/templates/nginx.conf.template > /etc/nginx/nginx.conf && nginx -t && exec nginx -g 'daemon off;'\"]");
         return lines;
     }
 
