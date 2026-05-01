@@ -725,7 +725,6 @@
     try {
       await syncLocalAnalysis({ force: true, syncPort: true });
       state.stepStatus[1] = "success";
-      state.phase = 2;
       renderAll();
     } catch (error) {
       handleTerminalError(1, error.message);
