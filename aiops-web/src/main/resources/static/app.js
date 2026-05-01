@@ -598,25 +598,76 @@
       || state.localContext?.deploymentHints?.recommendedConfigChoice
       || choices[0]?.id;
 
+    const localDockerChoices = choices.filter(c => c.id === "USE_LOCAL_DOCKERFILE");
+    const presetChoices = choices.filter(c => c.id !== "USE_LOCAL_DOCKERFILE");
+
     return `
       <div class="config-section" style="margin-top: 18px;">
         <div class="section-subhead">
           <div>
-            <h4>配置模式确认</h4>
-            <p>保持现有流程，只在当前步骤确认使用项目自带配置还是生成默认配置。</p>
+            <h4>部署策略选择</h4>
+            <p>选择部署方式：使用 AiOps 智能生成的预设方案，或使用项目本地的 Dockerfile。</p>
           </div>
         </div>
-        <div class="config-choice-list">
-          ${choices.map((choice) => `
-            <label class="config-choice ${selected === choice.id ? "selected" : ""}">
-              <input type="radio" name="configChoice" data-config-choice="true" value="${escapeAttribute(choice.id)}" ${selected === choice.id ? "checked" : ""}>
-              <div>
-                <strong>${escapeHtml(choice.label)}</strong>
-                <p>${escapeHtml(choice.description)}</p>
+
+        ${presetChoices.length ? `
+          <div style="margin-top: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+              <div style="width: 20px; height: 20px; border-radius: 4px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center;">
+                <span style="color: white; font-size: 12px; font-weight: bold;">A</span>
               </div>
-            </label>
-          `).join("")}
-        </div>
+              <strong style="color: #374151;">预设方案（推荐）</strong>
+              <span class="pill" style="background: #dbeafe; color: #1d4ed8;">AiOps 生成</span>
+            </div>
+            <p style="font-size: 13px; color: #6b7280; margin: 0 0 12px 28px;">AiOps 会根据项目类型智能生成优化的 Dockerfile 和部署脚本，确保最佳兼容性和性能。</p>
+            <div class="config-choice-list" style="margin-left: 28px;">
+              ${presetChoices.map((choice) => `
+                <label class="config-choice ${selected === choice.id ? "selected" : ""}">
+                  <input type="radio" name="configChoice" data-config-choice="true" value="${escapeAttribute(choice.id)}" ${selected === choice.id ? "checked" : ""}>
+                  <div>
+                    <strong>${escapeHtml(choice.label)}</strong>
+                    <p>${escapeHtml(choice.description)}</p>
+                  </div>
+                </label>
+              `).join("")}
+            </div>
+          </div>
+        ` : ""}
+
+        ${localDockerChoices.length ? `
+          <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid #e5e7eb;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+              <div style="width: 20px; height: 20px; border-radius: 4px; background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%); display: flex; align-items: center; justify-content: center;">
+                <span style="color: white; font-size: 12px; font-weight: bold;">D</span>
+              </div>
+              <strong style="color: #374151;">本地 Docker</strong>
+              <span class="pill" style="background: #d1fae5; color: #065f46;">项目自带</span>
+            </div>
+            <p style="font-size: 13px; color: #6b7280; margin: 0 0 12px 28px;">使用项目目录中已有的 Dockerfile，保留您的自定义配置。检测到的配置将显示在下方。</p>
+            <div class="config-choice-list" style="margin-left: 28px;">
+              ${localDockerChoices.map((choice) => `
+                <label class="config-choice ${selected === choice.id ? "selected" : ""}">
+                  <input type="radio" name="configChoice" data-config-choice="true" value="${escapeAttribute(choice.id)}" ${selected === choice.id ? "checked" : ""}>
+                  <div>
+                    <strong>${escapeHtml(choice.label)}</strong>
+                    <p>${escapeHtml(choice.description)}</p>
+                  </div>
+                </label>
+              `).join("")}
+            </div>
+
+            <div style="margin-top: 14px; margin-left: 28px;">
+              <div class="info-card" style="background: #f8fafc; border: 1px solid #e2e8f0; margin-bottom: 8px;">
+                <small>项目路径</small>
+                <strong>${escapeHtml(state.form.projectPath || "未知")}</strong>
+              </div>
+              <div class="info-card" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                <small>Dockerfile 位置</small>
+                <strong>${escapeHtml(state.form.projectPath || "")}/Dockerfile</strong>
+              </div>
+            </div>
+          </div>
+        ` : ""}
       </div>
     `;
   }

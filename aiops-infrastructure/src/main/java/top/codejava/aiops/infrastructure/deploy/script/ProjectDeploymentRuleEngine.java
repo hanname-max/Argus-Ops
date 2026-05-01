@@ -104,7 +104,15 @@ public class ProjectDeploymentRuleEngine {
             return false;
         }
         String packaging = context.localContext().packaging().trim().toLowerCase(Locale.ROOT);
-        return "jar".equals(packaging) || "nginx-static".equals(packaging);
+        boolean isJarOrNginx = "jar".equals(packaging) || "nginx-static".equals(packaging);
+        if (!isJarOrNginx) {
+            return false;
+        }
+        String confirmedConfigChoice = context.localContext().confirmedConfigChoice();
+        if (confirmedConfigChoice != null && "USE_LOCAL_DOCKERFILE".equalsIgnoreCase(confirmedConfigChoice)) {
+            return false;
+        }
+        return true;
     }
 
     private DeploymentPlan customDockerfilePlan(DeploymentDetectionContext context) {

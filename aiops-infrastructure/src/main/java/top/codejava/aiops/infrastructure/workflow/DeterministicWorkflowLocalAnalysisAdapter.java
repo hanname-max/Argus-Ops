@@ -67,6 +67,7 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
         List<WorkflowModels.ConfigEvidence> evidences = new ArrayList<>();
         List<WorkflowModels.WorkflowWarning> warnings = new ArrayList<>();
 
+        boolean hasDockerfile = rootEntries.contains("dockerfile");
         if (hasPom || hasGradle) {
             language = "Java";
             buildTool = hasPom ? "maven" : "gradle";
@@ -75,7 +76,7 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
             defaultPort = detectDefaultPort(projectPath, 8080);
             jdkVersion = detectJavaRelease(projectPath);
             String preferredJavaSubpath = detectPreferredJavaSubpath(projectPath);
-            deploymentHints = buildJavaHints(preferredJavaSubpath, buildTool);
+            deploymentHints = buildJavaHints(preferredJavaSubpath, buildTool, hasDockerfile);
             ProjectRuntimeConfigScanner.RuntimeConfigScanResult scanResult = projectRuntimeConfigScanner.scanJava(
                     projectPath,
                     preferredJavaSubpath,
@@ -186,7 +187,7 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
             framework = "Static Site";
             packaging = "nginx-static";
             defaultPort = 80;
-            deploymentHints = buildNginxHints(projectPath, fileNames);
+            deploymentHints = buildNginxHints(projectPath, fileNames, hasDockerfile);
             confirmedConfigChoice = confirmedConfigChoice == null || confirmedConfigChoice.isBlank()
                     ? deploymentHints.recommendedConfigChoice()
                     : confirmedConfigChoice;
@@ -240,11 +241,26 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
         return new WorkflowModels.LocalAnalysisPayload(context, List.copyOf(warnings));
     }
 
-    private WorkflowModels.DeploymentHints buildJavaHints(String preferredSubpath, String buildTool) {
+    private WorkflowModels.DeploymentHints buildJavaHints(String preferredSubpath, String buildTool, boolean hasDockerfile) {
         String artifactPattern = "maven".equalsIgnoreCase(buildTool) ? "**/target/*.jar" : "**/build/libs/*.jar";
         String buildCommand = "maven".equalsIgnoreCase(buildTool)
                 ? "mvn -DskipTests clean package"
                 : "./gradlew clean build -x test";
+        List<WorkflowModels.ConfigTemplateChoice> configChoices = new ArrayList<>();
+        if (hasDockerfile) {
+            configChoices.add(new WorkflowModels.ConfigTemplateChoice(
+                    "USE_LOCAL_DOCKERFILE",
+                    "使用本地 Dockerfile",
+                    "使用项目目录中的 Dockerfile 进行部署，适合已有自定义 Docker 配置的场景。",
+                    false
+            ));
+        }
+        configChoices.add(new WorkflowModels.ConfigTemplateChoice(
+                "GENERATED_JAR_RUNTIME",
+                "使用项目配置（推荐）",
+                "系统根据项目类型生成优化的 Dockerfile 和部署脚本，使用标准 Java 运行时镜像。",
+                true
+        ));
         return new WorkflowModels.DeploymentHints(
                 "JAVA",
                 preferredSubpath,
@@ -256,37 +272,45 @@ public class DeterministicWorkflowLocalAnalysisAdapter implements WorkflowLocalA
                         artifactPattern,
                         "Java services can usually start on any confirmed port as long as the jar artifact is correct."
                 ),
+                true,
                 false,
-                false,
-                null,
-                List.of()
+                configChoices.stream().filter(WorkflowModels.ConfigTemplateChoice::recommended).findFirst().map(WorkflowModels.ConfigTemplateChoice::id).orElse("GENERATED_JAR_RUNTIME"),
+                List.copyOf(configChoices)
         );
     }
 
-    private WorkflowModels.DeploymentHints buildNginxHints(Path projectPath, List<String> fileNames) {
+    private WorkflowModels.DeploymentHints buildNginxHints(Path projectPath, List<String> fileNames, boolean hasDockerfile) {
         boolean hasCustomNginxConfig = Files.isRegularFile(projectPath.resolve("nginx.conf"))
                 || Files.isRegularFile(projectPath.resolve("conf/nginx.conf"));
         boolean looksSpa = fileNames.stream().anyMatch(name -> name.toLowerCase(Locale.ROOT).endsWith(".js"));
         List<WorkflowModels.ConfigTemplateChoice> configChoices = new ArrayList<>();
+        if (hasDockerfile) {
+            configChoices.add(new WorkflowModels.ConfigTemplateChoice(
+                    "USE_LOCAL_DOCKERFILE",
+                    "使用本地 Dockerfile",
+                    "使用项目目录中的 Dockerfile 进行部署，适合已有自定义 Docker 配置的场景。",
+                    false
+            ));
+        }
         if (hasCustomNginxConfig) {
             configChoices.add(new WorkflowModels.ConfigTemplateChoice(
                     "CUSTOM_NGINX_CONF",
                     "使用项目自带 nginx.conf",
                     "部署时复用项目里已有的 nginx.conf，适合已经写好 location / upstream / proxy 的场景。",
-                    true
+                    !hasDockerfile
             ));
         }
         configChoices.add(new WorkflowModels.ConfigTemplateChoice(
                 "GENERATED_STATIC",
                 "生成静态站点配置",
                 "使用默认静态资源配置，适合普通 HTML/CSS/JS 页面。",
-                !hasCustomNginxConfig && !looksSpa
+                !hasDockerfile && !hasCustomNginxConfig && !looksSpa
         ));
         configChoices.add(new WorkflowModels.ConfigTemplateChoice(
                 "GENERATED_SPA",
                 "生成 SPA 路由配置",
                 "自动加入 try_files 规则，适合 Vue/React 路由前端。",
-                !hasCustomNginxConfig && looksSpa
+                !hasDockerfile && !hasCustomNginxConfig && looksSpa
         ));
         return new WorkflowModels.DeploymentHints(
                 "NGINX",
